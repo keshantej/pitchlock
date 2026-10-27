@@ -132,6 +132,25 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);ou
 .ring circle{fill:none;stroke-width:7}
 .ring-bg{stroke:var(--surface-2)}
 .ring-fg{stroke:var(--good);stroke-linecap:round;stroke-dasharray:169.65;stroke-dashoffset:169.65;transition:stroke-dashoffset .06s linear}
+.coach{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:50px}
+.sound{display:flex;flex-direction:column;align-items:flex-start;padding:6px 12px;border-radius:12px;background:var(--surface);border:1.5px solid var(--line);flex:none}
+.sound small{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2)}
+.sound b{font-size:20px;line-height:1.1}
+.sound span{font-size:12px;color:var(--ink-2)}
+.dir{font-size:22px;line-height:1.15;font-weight:800;text-align:right;text-wrap:balance;color:var(--ink)}
+.dir.good{color:var(--good)} .dir.near{color:var(--near)} .dir.off{color:var(--off)} .dir.acc{color:var(--accent)} .dir.mute{color:var(--ink-2);font-weight:650;font-size:18px}
+#dGo{grid-column:1 / -1}
+.lsn{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.lrow{appearance:none;border:0;background:none;width:100%;display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:10px;padding:9px 0;text-align:left;font-size:16px}
+.lsn li + li .lrow{border-top:1px solid var(--line)}
+.ck{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:800;background:var(--surface-2);color:var(--ink-2)}
+.ck.done{background:var(--good);color:var(--bg)}
+.ck.next{background:var(--accent);color:var(--accent-ink)}
+.lt{font-size:12px;color:var(--ink-2)}
+.help{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.help li{display:grid;grid-template-columns:22px 1fr;gap:10px;font-size:15px;color:var(--ink-2)}
+.help li i{width:22px;height:12px;border-radius:6px;margin-top:4px}
+.help b{color:var(--ink)}
 .fb{margin:0;min-height:1.5em;font-size:16px;font-weight:650;text-wrap:balance}
 .fb.good{color:var(--good)} .fb.off{color:var(--off)} .fb.acc{color:var(--accent)}
 .dctrl{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -170,7 +189,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);ou
 .warn{color:var(--near)}
 
 /* Progress */
-.ladder{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.ladder{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
 .ladder i{height:10px;border-radius:3px;background:var(--surface-2)}
 .ladder i.f{background:var(--accent)}
 .ladder-l{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-2);font-family:var(--mono);margin-top:4px}
@@ -182,7 +201,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);ou
 .empty{color:var(--ink-2);font-size:14px;margin:0}
 
 /* Settings */
-.set{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px}
+.set{display:flex;align-items:center;justify-content:space-between;gap:10px 14px;padding:14px 16px;flex-wrap:wrap}
 .set + .set{border-top:1px solid var(--line)}
 .set .t{font-weight:650}
 .set .d{font-size:13px;color:var(--ink-2);margin-top:2px;max-width:40ch}
@@ -253,6 +272,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);ou
     <div class="phase"><span id="dPhase" class="chip phase-chip" data-p="listen">Listen</span><div id="dDots" class="dots"></div></div>
     <h2 id="dTitle" class="prompt">Match the note</h2>
     <p id="dSub" class="dsub"></p>
+    <div id="dCoach" class="coach" hidden><div id="cSound" class="sound"></div><div id="cDir" class="dir"></div></div>
     <div id="laneMode" class="lane-mode">
       <div class="lane-wrap"><canvas id="dLane"></canvas></div>
       <div class="readout">
@@ -265,7 +285,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);ou
       <div id="cBtns" class="c-btns"></div>
     </div>
     <p id="dFb" class="fb" aria-live="polite"></p>
-    <div class="dctrl"><button id="dReplay" class="btn ghost" data-act="d-replay">Replay</button><button id="dSkip" class="btn ghost" data-act="d-skip">Skip</button></div>
+    <div class="dctrl"><button id="dReplay" class="btn ghost" data-act="d-replay">Hear it again</button><button id="dSkip" class="btn ghost" data-act="d-skip">Skip</button><button id="dGo" class="btn" data-act="d-go" hidden>Continue</button></div>
   </div>
   <div id="dEnd" class="dend" hidden></div>
 </section>
@@ -274,7 +294,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);ou
 'use strict';
 /* ---------- constants ---------- */
 const KEY = 'pitchlock.v1';
-const TOLS = [50, 40, 30, 25, 20, 15, 10];
+const TOLS = [100, 75, 50, 40, 30, 25, 20, 15, 10]; // cents; 100¢ = one semitone
 const NOTE = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
 const VOICES = [['Bass',41,60],['Baritone',45,64],['Tenor',48,67],['Alto',53,72],['Mezzo',57,76],['Soprano',60,79]];
 // Order = unlock order (easiest-to-hear first). Cues are first-notes references, ascending.
@@ -292,22 +312,37 @@ const INTERVALS = [
   {s:11, n:'major 7th',   cue:'“Take On Me” chorus (notes 1→2)'},
   {s:6,  n:'tritone',     cue:'“Maria” from West Side Story (notes 1→2)'}
 ];
-const MAXL = {match:6, interval:9, echo:8, idq:8};
+const MAXL = {match:8, interval:9, echo:8, idq:8};
 const MIX = ['match','match','interval','match','echo','interval','match','interval','echo','match','interval','echo'];
+const MIX_BEGIN = ['match','match','match','echo','match','match','interval','match','echo','match','match','match'];
+const SOUNDS = {
+  hum:{say:'mmm', how:'a hum, lips closed'},
+  oo:{say:'oo', how:'as in “food”'},
+  oh:{say:'oh', how:'as in “go”'},
+  ah:{say:'ah', how:'as in “father”'}
+};
+const LESSONS = [
+  {id:'voice',  name:'Make a sound',       time:'30 sec'},
+  {id:'updown', name:'Higher and lower',   time:'1 min'},
+  {id:'steady', name:'Hold a steady note', time:'1 min'},
+  {id:'range',  name:'Find your range',    time:'1 min'},
+  {id:'first',  name:'Your first matches', time:'2 min'}
+];
 const MAJ = [0,2,4,5,7,9,11];
 
 /* ---------- state ---------- */
 const S = load();
 function load(){
-  const d = {range:null, voice:null, strictOctave:false, headphones:false, refDur:1.2,
+  const d = {schema:2, range:null, voice:null, comfort:null, sound:'auto', guide:true, strictOctave:false, headphones:false, refDur:1.2,
     levels:{match:0, interval:0, echo:0, idq:0}, win:{match:[], interval:[], echo:[]},
-    attempts:[], days:{}, ear:[], sessions:[]};
+    lessons:{}, attempts:[], days:{}, ear:[], sessions:[]};
   let s = null;
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
   if (!s || typeof s !== 'object') return d;
   for (const k in d) if (!(k in s)) s[k] = d[k];
   for (const k in d.levels) if (!(k in s.levels)) s.levels[k] = 0;
   for (const k in d.win) if (!(k in s.win)) s.win[k] = [];
+  if (s.schema !== 2) { s.levels.match = Math.min(MAXL.match, s.levels.match + 2); s.schema = 2; } // two easier bands were added below ±50¢
   return s;
 }
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
@@ -329,9 +364,19 @@ const R = () => S.range || [48, 67];
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rand(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 function tolFor(d){
   if (d === 'match') return TOLS[S.levels.match];
-  if (d === 'interval') return TOLS[Math.min(6, Math.floor(S.levels.interval / 2))];
-  return TOLS[Math.min(6, Math.floor(S.levels.echo / 2))];
+  if (d === 'interval') return TOLS[Math.min(6, Math.floor(S.levels.interval * .75))];
+  return TOLS[Math.min(6, Math.floor(S.levels.echo * .75))];
 }
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const comfortNote = () => { const [lo, hi] = R(); return clamp(S.comfort != null ? S.comfort : Math.round((lo + hi) / 2), lo, hi); };
+// Auto vowel: relaxed "oh" low, open "ah" in the middle, narrow "oo" up high (narrower vowels make high notes easier).
+function soundFor(m){
+  if (S.sound !== 'auto') return S.sound;
+  const [lo, hi] = R(), p = (m - lo) / Math.max(1, hi - lo);
+  return p < .34 ? 'oh' : p < .67 ? 'ah' : 'oo';
+}
+const lessonDone = id => id === 'range' ? !!S.range : !!S.lessons[id];
+const nextLesson = () => LESSONS.find(l => !lessonDone(l.id)) || null;
 const unlockedIntervals = () => INTERVALS.slice(0, Math.min(INTERVALS.length, 3 + S.levels.interval));
 
 /* ---------- audio ---------- */
@@ -396,11 +441,11 @@ const Audio = {
     for (const o of this.live) { try { o.stop(); } catch(e){} }
     this.live = []; this.busyUntil = 0; this.stopDrone();
   },
-  drone(m){
+  drone(m, gain = .2){
     this.stopDrone();
     const c = this.ctx, o = c.createOscillator(), g = c.createGain();
     o.setPeriodicWave(this.wave()); o.frequency.value = hz(m);
-    g.gain.setValueAtTime(0, c.currentTime); g.gain.linearRampToValueAtTime(.2, c.currentTime + .15);
+    g.gain.setValueAtTime(0, c.currentTime); g.gain.linearRampToValueAtTime(gain, c.currentTime + .15);
     o.connect(g); g.connect(this.master); o.start();
     this._drone = {o, g};
   },
@@ -609,11 +654,15 @@ function streak(){
 
 /* ---------- item generators ---------- */
 let lastT = null;
-function genMatch(){
-  const [lo, hi] = R(); let t = rand(lo, hi), g = 0;
-  while (t === lastT && g++ < 10) t = rand(lo, hi);
+// Beginners get targets close to their easiest note; the pool widens as the band tightens.
+function genMatch(spread){
+  const [lo, hi] = R(), L = S.levels.match, c = comfortNote();
+  const sp = spread != null ? spread : L < 2 ? 2 : L < 4 ? 4 : L < 6 ? 7 : 99;
+  const a = Math.max(lo, c - sp), b = Math.min(hi, c + sp);
+  let t = rand(a, b), g = 0;
+  while (t === lastT && b > a && g++ < 10) t = rand(a, b);
   lastT = t;
-  return {type:'match', targets:[t], hold:800, timeout:7000, title:'Match the note', sub:'Target ' + nn(t)};
+  return {type:'match', targets:[t], hold:800, timeout:L < 3 ? 10000 : 7000, title:'Match the note', sub:'Target ' + nn(t) + ' · listen, then sing it back'};
 }
 function genInterval(){
   const [lo, hi] = R();
@@ -623,9 +672,10 @@ function genInterval(){
   const dir = S.levels.interval >= 2 && Math.random() < .4 ? -1 : 1;
   const root = dir > 0 ? rand(lo, hi - iv.s) : rand(lo + iv.s, hi);
   const t = root + dir * iv.s;
-  return {type:'interval', root, iv, dir, targets:[t], hold:800, timeout:7000,
+  const demo = S.levels.interval < 2;
+  return {type:'interval', root, iv, dir, demo, targets:[t], hold:800, timeout:demo ? 10000 : 7000,
     title:'Sing a ' + iv.n + (dir > 0 ? ' up' : ' down'),
-    sub:'From ' + nn(root) + (dir > 0 ? ' · think ' + iv.cue : '')};
+    sub:(demo ? 'You’ll hear the start note, then the target. Sing the second one. ' : 'From ' + nn(root) + '. ') + (dir > 0 ? 'It sounds like ' + iv.cue + '.' : '')};
 }
 function genEcho(){
   const [lo, hi] = R(), lvl = S.levels.echo, len = Math.min(6, 3 + Math.floor(lvl / 2)), leap = lvl >= 3;
@@ -638,10 +688,10 @@ function genEcho(){
     const opts = steps.map(s => cur + s).filter(ok);
     cur = opts.length ? pick(opts) : cur; seq.push(cur);
   }
-  return {type:'echo', targets:seq.map(d2m), hold:450, timeout:5000, title:'Echo the phrase', sub:len + ' notes. Hold each one until it locks.'};
+  return {type:'echo', targets:seq.map(d2m), hold:450, timeout:lvl < 2 ? 7000 : 5000, title:'Echo the phrase', sub:len + ' notes. Sing them back one at a time; each dot turns green when it locks.'};
 }
 const GEN = {match:genMatch, interval:genInterval, echo:genEcho};
-const NAMES = {mix:'Daily mix', match:'Match a note', interval:'Sing an interval', echo:'Echo a phrase', hl:'Higher or lower', idq:'Name the interval', range:'Find your range'};
+const NAMES = {mix:'Daily mix', match:'Match a note', interval:'Sing an interval', echo:'Echo a phrase', hl:'Higher or lower', idq:'Name the interval', range:'Find your range', lesson:'Lesson'};
 
 /* ---------- drill sheet ---------- */
 const lane = new Lane($('dLane'));
@@ -655,7 +705,21 @@ const D = {
     $('drill').hidden = false; $('dEnd').hidden = true; $('dMain').hidden = false;
     $('dName').textContent = NAMES[kind]; $('dFb').textContent = ''; $('dFb').className = 'fb';
     $('dDots').innerHTML = ''; $('dBar').style.width = '0%';
+    $('dCoach').hidden = true; $('dGo').hidden = true; $('dReplay').hidden = false; $('dSkip').hidden = false; this.item = null;
     keepAwake(true);
+  },
+  coach(sound, text, cls){
+    const c = $('dCoach'); c.hidden = false;
+    const el = $('cSound');
+    if (sound) { const x = SOUNDS[sound]; el.hidden = false; el.innerHTML = '<small>Sing</small><b>“' + x.say + '”</b><span>' + x.how + '</span>'; }
+    else el.hidden = true;
+    if (text != null) { const d = $('cDir'); d.textContent = text; d.className = 'dir' + (cls ? ' ' + cls : ''); }
+  },
+  coachDir(text, cls){ const d = $('cDir'); if (d.textContent !== text) d.textContent = text; d.className = 'dir' + (cls ? ' ' + cls : ''); },
+  waitGo(label){
+    $('dReplay').hidden = true; $('dSkip').hidden = true;
+    const g = $('dGo'); g.textContent = label; g.hidden = false;
+    return new Promise(r => { this.goRes = v => { this.goRes = null; g.hidden = true; $('dReplay').hidden = false; $('dSkip').hidden = false; r(v); }; });
   },
   header(i, n, tolText){
     $('dCount').textContent = (i + 1) + ' of ' + n;
@@ -693,6 +757,7 @@ const D = {
     this.token++;
     if (this.cancelSing) this.cancelSing('abort');
     if (this.choiceRes) { const r = this.choiceRes; this.choiceRes = null; r(null); }
+    if (this.goRes) this.goRes(null);
     Engine.stop(); if (Audio.ctx) Audio.stopAll(); Audio.releaseMic(); keepAwake(false);
     $('drill').hidden = true;
     renderTrain(); renderProgress();
@@ -709,8 +774,10 @@ const D = {
     if (!(await this.micOrExplain()) || !this.alive(tok)) return;
     lane.fit(); lane.tr = []; lane.follow = false;
     Engine.lane = lane; Engine.handler = m => this.readout(m, null, 0); Engine.start();
-    const plan = kind === 'mix' ? MIX.slice() : Array(10).fill(kind);
+    const beginner = S.levels.match < 3 && S.levels.interval === 0;
+    const plan = kind === 'mix' ? (beginner ? MIX_BEGIN : MIX).slice() : Array(10).fill(kind);
     const res = [], before = {...S.levels};
+    if (kind === 'mix') { await this.warmup(tok); if (!this.alive(tok)) return; }
     for (let i = 0; i < plan.length; i++) {
       if (!this.alive(tok)) return;
       const it = GEN[plan[i]](); this.item = it;
@@ -730,7 +797,9 @@ const D = {
     lane.targets = it.targets; lane.active = 0; lane.tol = tol; lane.ghost = it.root != null ? it.root : null;
     lane.frame(it.targets, lane.ghost);
     this.dots(it.targets.length);
+    const snd = soundFor(mean(it.targets));
     $('dTitle').textContent = it.title; $('dSub').textContent = it.sub; this.fb('');
+    this.coach(snd, 'Listen first…', 'mute');
     this.readout(null, null, 0);
     this.setPhase('listen');
     await this.playRef(it);
@@ -739,7 +808,16 @@ const D = {
     const per = [];
     for (let k = 0; k < it.targets.length; k++) {
       lane.active = k; this.dot(k, 'on');
-      const r = await this.sing(it.targets[k], tol, it.hold, it.timeout);
+      let prefix = '';
+      if (it.type === 'echo') {
+        const step = k ? it.targets[k] - it.targets[k - 1] : 0;
+        prefix = 'Note ' + (k + 1) + ' of ' + it.targets.length + (k ? (step > 0 ? ' · step up' : step < 0 ? ' · step down' : ' · same note') : ' · the first note') + '. ';
+        $('dSub').textContent = prefix + 'Dots turn green as each note locks.';
+      }
+      const guide = S.headphones && S.guide;
+      if (guide) Audio.drone(it.targets[k], .07);
+      const r = await this.sing(it.targets[k], tol, it.hold, it.timeout, snd);
+      if (guide) Audio.stopDrone();
       if (!this.alive(tok)) return {};
       if (r.skipped) { Engine.handler = m => this.readout(m, null, 0); return {skipped:true}; }
       per.push(r); this.dot(k, r.ok ? 'hit' : 'miss');
@@ -753,33 +831,44 @@ const D = {
     const before = it.type === 'interval' ? unlockedIntervals().length : 0;
     const ch = record(it.type, ok, err);
     let msg, cls;
-    if (it.type === 'echo') { msg = hits + ' of ' + per.length + ' notes locked' + (err != null ? ' · ' + lean(err) + ' on average' : ''); cls = ok ? 'good' : hits ? 'acc' : 'off'; }
-    else if (ok) { msg = 'Locked · ' + lean(err || 0) + (octave ? ' · in a different octave' : ''); cls = 'good'; }
-    else { msg = err != null ? 'Missed · about ' + lean(err) : 'Missed · no steady pitch heard'; cls = 'off'; }
+    if (it.type === 'echo') { msg = hits + ' of ' + per.length + ' notes locked'; cls = ok ? 'good' : hits ? 'acc' : 'off'; }
+    else if (ok) { msg = 'Locked in · ' + lean(err || 0) + (octave ? ' (one octave away, which counts)' : ''); cls = 'good'; }
+    else { msg = err != null ? 'Not quite · you were about ' + lean(err) : 'Not quite · no steady note heard'; cls = 'off'; }
     if (ch > 0) {
       if (it.type === 'interval' && unlockedIntervals().length > before) msg += ' · New interval unlocked: ' + unlockedIntervals()[unlockedIntervals().length - 1].n;
-      else msg += ' · Level up: ±' + tolFor(it.type) + '¢';
-    } else if (ch < 0) msg += ' · Easing off to ±' + tolFor(it.type) + '¢';
+      else msg += ' · Level up: band now ±' + tolFor(it.type) + '¢';
+    } else if (ch < 0) msg += ' · Band widened to ±' + tolFor(it.type) + '¢';
     this.fb(msg, cls);
-    if (!ok) { // model the right answer right after a miss
-      lane.active = 0;
-      await Audio.play(it.type === 'echo' ? it.targets.map(m => [m, .5, .08]) : [[it.targets[0], 1.0]]);
-    } else await sleep(500);
+    if (!ok) {
+      const miss = per.find(p => !p.ok);
+      $('dSub').textContent = this.tip(miss, tol) + ' Here’s the right answer:';
+      this.coachDir('Listen…', 'mute');
+      lane.active = Math.max(0, per.indexOf(miss));
+      await Audio.play(it.type === 'echo' ? it.targets.map(m => [m, .5, .08]) : [[it.targets[0], 1.2]]);
+      await sleep(500);
+    } else { this.coachDir('Nice!', 'good'); await sleep(500); }
     return {ok, err, octave, type:it.type};
+  },
+  tip(r, tol){
+    if (!r || r.err == null) return 'No steady note heard. Sing a little louder, hold the phone closer, and keep the sound going for a few seconds.';
+    if (Math.abs(r.err) <= tol * 2.5) return 'Close. Keep the sound going and nudge it toward the band until the ring fills.';
+    if (r.err < 0) return 'You were below the target. Try starting a little higher, then slide down until the line turns green.';
+    return 'You were above the target. Try starting a little lower, then slide up until the line turns green.';
   },
   async playRef(it){
     const dur = S.refDur;
     if (it.type === 'match') await Audio.play([[it.targets[0], dur]]);
-    else if (it.type === 'interval') await Audio.play([[it.root, dur]]);
+    else if (it.type === 'interval') await Audio.play(it.demo ? [[it.root, dur, .35], [it.targets[0], dur]] : [[it.root, dur]]);
     else await Audio.play(it.targets.map(m => [m, .55, .08]));
   },
-  sing(target, tol, hold, timeout){
+  sing(target, tol, hold, timeout, snd){
     return new Promise(res => {
-      let held = 0, elapsed = 0, voiced = 0, done = false, oct = 0;
-      const errs = [];
+      let held = 0, elapsed = 0, voiced = 0, done = false, oct = 0, silent = 0, lastC = 0;
+      const errs = [], recent = [];
+      this.coach(snd, 'Your turn: sing now', 'acc');
       const finish = (ok, why) => {
         if (done) return; done = true; this.cancelSing = null; Engine.handler = null;
-        const tail = errs.slice(-40);
+        const tail = errs.slice(-25);
         res({ok, skipped: why === 'skip' || why === 'abort', err: errs.length ? (ok ? mean(tail) : median(errs)) : null, octave: errs.length > 0 && oct > errs.length * .5});
       };
       this.cancelSing = why => finish(false, why);
@@ -789,11 +878,27 @@ const D = {
         if (m != null) {
           const raw = (m - target) * 100; e = raw;
           if (!S.strictOctave) { const k = Math.round(raw / 1200); if (k) { e = raw - k * 1200; oct++; } }
-          voiced += dt;
+          voiced += dt; silent = 0;
           if (voiced > 250) errs.push(e);
+          recent.push(e); if (recent.length > 8) recent.shift();
           if (Math.abs(e) <= tol) held += dt; else held = Math.max(0, held - dt * 1.5);
-        } else held = Math.max(0, held - dt * .5);
+        } else { held = Math.max(0, held - dt * .5); if (!muted) silent += dt; recent.length = 0; }
         this.readout(m, e, held / hold);
+        if (now - lastC > 200) { // live coaching, throttled so it doesn't flicker
+          lastC = now;
+          if (muted) this.coachDir('Listening to the tone…', 'mute');
+          else if (m == null) this.coachDir(silent > 2500 ? 'I can’t hear you. Sing a bit louder.' : voiced ? 'Keep the sound going' : 'Your turn: sing now', silent > 2500 ? 'off' : 'acc');
+          else {
+            const me = median(recent), a = Math.abs(me);
+            if (a <= tol) this.coachDir('Hold it right there', 'good');
+            else {
+              const up = me < 0, cls = a <= tol * 2.5 ? 'near' : 'off';
+              // Wording follows the real distance (100¢ = one semitone); color follows the band.
+              const amt = a > 400 ? (up ? 'Go a lot higher ↑↑' : 'Go a lot lower ↓↓') : a > 150 ? (up ? 'Go higher ↑' : 'Go lower ↓') : a > 60 ? (up ? 'A little higher ↑' : 'A little lower ↓') : (up ? 'A touch higher ↑' : 'A touch lower ↓');
+              this.coachDir(amt, cls);
+            }
+          }
+        }
         if (held >= hold) finish(true);
         else if (elapsed >= timeout) finish(false);
       };
@@ -815,15 +920,152 @@ const D = {
     }
     this.end(hits, n, rows, kind);
   },
-  end(hits, n, rows, kind, headline){
+  end(hits, n, rows, kind, headline, btns){
     Engine.handler = null;
     $('dMain').hidden = true; const e = $('dEnd'); e.hidden = false;
     const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-    e.innerHTML = '<div><div class="eyebrow" style="margin-left:0">' + esc(NAMES[kind]) + ' · done</div>' +
+    e.innerHTML = '<div><div class="eyebrow" style="margin-left:0">' + esc(kind === 'lesson' ? $('dName').textContent : NAMES[kind]) + ' · done</div>' +
       (headline ? '<div class="score">' + headline + '</div>' : '<div class="score">' + hits + '<small> / ' + n + '</small></div>') + '</div>' +
-      '<div class="kv">' + rows.map(r => '<div><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>').join('') + '</div>' +
-      '<div class="endbtns"><button class="btn ghost" data-act="d-close">Done</button><button class="btn" data-act="start" data-kind="' + kind + '">Go again</button></div>';
+      (rows.length ? '<div class="kv">' + rows.map(r => '<div><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>').join('') + '</div>' : '') +
+      (btns || '<div class="endbtns"><button class="btn ghost" data-act="d-close">Done</button><button class="btn" data-act="start" data-kind="' + kind + '">Go again</button></div>');
     Engine.stop(); Audio.releaseMic(); keepAwake(false);
+  },
+
+
+  /* --- guided tasks (lessons + warm-up) --- */
+  task(step){
+    return new Promise(res => {
+      let done = false;
+      const fin = v => { if (done) return; done = true; this.cancelSing = null; Engine.handler = m => this.readout(m, null, 0); res(v); };
+      this.cancelSing = why => fin(why === 'abort' ? null : 'skipped');
+      let lastC = 0;
+      Engine.handler = (m, dt, now, muted) => {
+        const r = step(m, dt, muted);
+        this.readout(m, null, r.p);
+        if (r.say && now - lastC > 200) { lastC = now; this.coachDir(r.say, r.cls); }
+        if (r.done) fin(r.value != null ? r.value : true);
+      };
+    });
+  },
+  taskVoiced(ms, keep){
+    const vals = []; let v = 0, silent = 0;
+    return this.task((m, dt) => {
+      if (m != null) { v += dt; vals.push(m); silent = 0; } else { silent += dt; v = Math.max(0, v - dt * .3); }
+      const say = m != null ? (keep || 'Keep it going…') : silent > 2500 ? 'I can’t hear you yet. A bit louder.' : 'Make the sound now';
+      return {p: v / ms, say, cls: m != null ? 'good' : silent > 2500 ? 'off' : 'acc', done: v >= ms, value: median(vals.slice(-60))};
+    });
+  },
+  taskSlide(dir, semis){
+    let ext = null, sil = 0;
+    return this.task((m, dt) => {
+      if (m == null) { sil += dt; if (sil > 400) ext = null; return {p:0, say: dir > 0 ? 'Start low on “oo”…' : 'Start high on “oo”…', cls:'acc'}; }
+      sil = 0; if (ext == null) ext = m;
+      ext = dir > 0 ? Math.min(ext, m) : Math.max(ext, m);
+      const moved = dir > 0 ? m - ext : ext - m, p = moved / semis;
+      const say = p < .15 ? (dir > 0 ? 'Now glide up ↑' : 'Now glide down ↓') : p < 1 ? (dir > 0 ? 'Keep going up ↑' : 'Keep going down ↓') : 'That’s it!';
+      return {p, say, cls: p < .15 ? 'acc' : 'good', done: p >= 1};
+    });
+  },
+  taskSteady(ms, tolC){
+    const w = []; let held = 0;
+    return this.task((m, dt) => {
+      let say = 'Sing one easy note', cls = 'acc';
+      if (m == null) { w.length = 0; held = Math.max(0, held - dt); }
+      else {
+        w.push(m); if (w.length > 24) w.shift();
+        if (w.length >= 8) {
+          const steady = Math.abs(m - median(w)) * 100 <= tolC;
+          held = steady ? held + dt : Math.max(0, held - 2 * dt);
+          say = steady ? 'Steady… keep it flat' : 'Wobbling. Smooth, even air.'; cls = steady ? 'good' : 'near';
+        } else say = 'Keep it going…';
+      }
+      return {p: held / ms, say, cls, done: held >= ms};
+    });
+  },
+  async warmup(tok){
+    $('dCount').textContent = 'Warm-up'; $('dTol').hidden = true;
+    lane.targets = []; lane.active = -1; lane.ghost = null; lane.follow = true; lane.center = comfortNote(); lane.half = 7;
+    $('dTitle').textContent = 'Warm-up: siren'; $('dSub').textContent = 'Slide smoothly from low to high and back down, like a siren, until the ring fills. Easy and quiet is fine. Tap Skip if you’re already warm.';
+    this.coach('oo', 'Start sliding', 'acc'); this.fb(''); this.setPhase('sing'); $('dReplay').disabled = true;
+    await this.taskVoiced(8000, 'Keep sliding up and down');
+    lane.follow = false;
+    if (this.alive(tok)) { this.fb('Warmed up.', 'good'); await sleep(600); this.fb(''); }
+  },
+  async runLesson(id){
+    if (id === 'next') { const n = nextLesson(); id = n ? n.id : LESSONS[0].id; }
+    if (id === 'range') return this.runRange(true);
+    const idx = LESSONS.findIndex(l => l.id === id), L = LESSONS[idx];
+    const tok = ++this.token;
+    this.show('lesson'); $('dName').textContent = L.name; $('dCount').textContent = 'Lesson ' + (idx + 1) + ' of ' + LESSONS.length; $('dTol').hidden = true;
+    $('laneMode').hidden = false; $('choiceMode').hidden = true;
+    $('dTitle').textContent = 'Getting the mic ready…'; $('dSub').textContent = '';
+    if (!(await this.micOrExplain()) || !this.alive(tok)) return;
+    lane.fit(); lane.tr = []; lane.targets = []; lane.active = -1; lane.ghost = null; lane.follow = true; lane.center = comfortNote(); lane.half = 7;
+    Engine.lane = lane; Engine.handler = m => this.readout(m, null, 0); Engine.start();
+    const say = (t, b) => { $('dTitle').textContent = t; $('dSub').textContent = b; this.fb(''); };
+    const info = async (t, b, go) => { say(t, b); this.setPhase('result'); $('dPhase').textContent = 'Read'; this.coach(null, '', ''); $('dCoach').hidden = true; return this.waitGo(go || 'Got it'); };
+    const doTask = (t, b, snd) => { say(t, b); this.setPhase('sing'); $('dReplay').disabled = true; this.coach(snd, 'Make the sound now', 'acc'); };
+    const steps = idx + 1;
+    $('dBar').style.width = '0%';
+
+    if (id === 'voice') {
+      if (await info('No experience needed', 'This lesson just gets a sound on screen. Make a gentle, easy sound: a hum with your lips closed (“mmm”) or “oo” as in “food”. Quiet is fine. Hold the phone about a forearm’s length from your mouth.', 'I’m ready') == null) return;
+      doTask('Hum or sing “oo” for 2 seconds', 'Any note that feels easy, like a long relaxed sigh. Watch the line appear.', 'oo');
+      const m = await this.taskVoiced(2000); if (m == null || !this.alive(tok)) return;
+      if (typeof m === 'number') { S.comfort = Math.round(m); save(); this.fb('Your easy note is around ' + nn(m) + '. Drills will start near it.', 'good'); await sleep(1400); }
+      $('dBar').style.width = '60%';
+      if (await info('Reading the line', 'That line is your pitch. Higher on screen means a higher note. The labels on the left are note names: the letter is the note, the number is the octave, and a bigger number is higher.' + (typeof m === 'number' ? ' ' + nn(m) + ' is where your voice sat just now.' : ''), 'Next') == null) return;
+    }
+    if (id === 'updown') {
+      if (await info('What “higher” means', 'Pitch is how high or low a sound is: a squeaky mouse is high, a big dog’s woof is low. It has nothing to do with loudness. When the app says “go higher”, make the sound squeakier, not louder.', 'Got it') == null) return;
+      doTask('Start low, then slide up', 'On “oo”, start on a low, easy sound and glide upward smoothly, like a siren. Watch the line climb.', 'oo');
+      if ((await this.taskSlide(1, 4)) == null || !this.alive(tok)) return;
+      this.fb('You moved your pitch up on purpose.', 'good'); await sleep(1100); $('dBar').style.width = '50%';
+      doTask('Now slide back down', 'Start on a higher sound and glide down, like a siren fading away.', 'oo');
+      if ((await this.taskSlide(-1, 4)) == null || !this.alive(tok)) return;
+      this.fb('And down. That’s the whole skill.', 'good'); await sleep(1100); $('dBar').style.width = '80%';
+      if (await info('This is how you’ll fix notes', 'In every drill, the coach tells you which way to move: “go higher” or “go lower”. You’ll make exactly the slide you just did, only smaller, until the line turns green.', 'Next') == null) return;
+    }
+    if (id === 'steady') {
+      if (await info('Hold a note steady', 'Songs are mostly notes you hold. Take a normal breath, pick any easy note, and keep the sound even, like drawing a straight line with your voice. Relax your jaw and let the air flow out slowly.', 'I’m ready') == null) return;
+      doTask('Hold one note for 2 seconds', 'Keep the line flat. If it wobbles, use a little more air and a little less push.', S.sound === 'auto' ? 'oo' : S.sound);
+      if ((await this.taskSteady(2000, 35)) == null || !this.alive(tok)) return;
+      this.fb('Steady. That’s what “locking in” means in the drills.', 'good'); await sleep(1300);
+      $('dBar').style.width = '50%';
+      doTask('Once more, a little longer', 'Hold a steady note for 3 seconds. Breathe first.', S.sound === 'auto' ? 'oo' : S.sound);
+      if ((await this.taskSteady(3000, 35)) == null || !this.alive(tok)) return;
+      this.fb('Solid.', 'good'); await sleep(900);
+    }
+    if (id === 'first') {
+      if (!S.range) { say('Set your range first', 'Lesson 4 finds the notes you can reach comfortably. Do that one, then come back.'); this.setPhase('result'); return; }
+      if (await info('How a drill works', '1. The app plays a note. Just listen.  2. When it says “Your turn”, sing that same note back on the sound shown.  3. The orange band is the target. Your line is green inside it, yellow when close, red when far.  4. Follow the coach (“go higher”, “go lower”) and hold until the ring fills.', 'Next') == null) return;
+      if (await info('Two things that trip up beginners', 'You don’t have to sound good, just land in the band. And if the tone sounds higher or lower than your voice can go, sing the same note in your own octave; that counts. Men often sing an octave below the tone, and that’s fine.', 'Start') == null) return;
+      lane.follow = false;
+      const res = [];
+      for (let i = 0; i < 3; i++) {
+        if (!this.alive(tok)) return;
+        $('dCount').textContent = 'Lesson 5 · note ' + (i + 1) + ' of 3';
+        $('dTol').hidden = false; $('dTol').textContent = '±100¢';
+        $('dBar').style.width = (i / 3 * 100) + '%';
+        const it = genMatch(2); it.timeout = 12000; this.item = it;
+        const r = await this.runItem(it, 100, tok);
+        if (!this.alive(tok)) return;
+        if (!r.skipped) res.push(r);
+        await sleep(900);
+      }
+      $('dBar').style.width = '100%';
+      S.lessons.first = true; save();
+      const hits = res.filter(r => r.ok).length, nl = nextLesson();
+      this.end(hits, res.length, [['What’s next', hits >= 2 ? 'Daily mix, a few minutes a day' : 'Repeat this lesson or try Match a note'], ['The band you start at', '±' + tolFor('match') + '¢ (100¢ = one semitone)']], 'lesson', null,
+        '<div class="endbtns"><button class="btn ghost" data-act="d-close">Done</button>' + (nl ? '<button class="btn" data-act="lesson" data-id="' + nl.id + '">Next: ' + nl.name + '</button>' : '<button class="btn" data-act="start" data-kind="mix">Start daily mix</button>') + '</div>');
+      return;
+    }
+    if (!this.alive(tok)) return;
+    S.lessons[id] = true; save();
+    $('dBar').style.width = '100%';
+    const nl = nextLesson();
+    this.end(0, 0, [], 'lesson', '<small>Lesson ' + steps + ' done</small>',
+      '<div class="endbtns"><button class="btn ghost" data-act="d-close">Done</button>' + (nl ? '<button class="btn" data-act="lesson" data-id="' + nl.id + '">Next: ' + nl.name + '</button>' : '<button class="btn" data-act="start" data-kind="mix">Start daily mix</button>') + '</div>');
   },
 
   /* --- listen-only drills --- */
@@ -935,21 +1177,22 @@ const D = {
   },
 
   /* --- range finder --- */
-  async runRange(){
+  async runRange(asLesson){
     const tok = ++this.token;
-    this.show('range'); $('laneMode').hidden = false; $('choiceMode').hidden = true;
+    this.show('range');
+    if (asLesson) $('dName').textContent = 'Lesson 4 · Find your range'; $('laneMode').hidden = false; $('choiceMode').hidden = true;
     $('dTol').hidden = true; $('dCount').textContent = 'Two steps';
     $('dTitle').textContent = 'Getting the mic ready…'; $('dSub').textContent = '';
     if (!(await this.micOrExplain()) || !this.alive(tok)) return;
     lane.fit(); lane.tr = []; lane.targets = []; lane.active = -1; lane.ghost = null; lane.follow = true; lane.center = 55; lane.half = 9;
     Engine.lane = lane; Engine.start();
-    const steps = [['Sing your lowest comfortable note', 'Slide down on “ah” until it starts to feel strained, come back up a little, and hold it.'],
-                   ['Now your highest comfortable note', 'Slide up until it gets thin or tight, come back down a little, and hold it. No falsetto.']];
+    const steps = [['Sing your lowest comfortable note', 'On “ah”, slide down until your voice gets gravelly or quiet, come back up a little to where it feels easy, and hold that note steady.'],
+                   ['Now your highest comfortable note', 'On “oo”, slide up until it starts to feel tight or squeaky, come back down a little, and hold it. No straining.']];
     const got = [];
     for (let i = 0; i < 2; i++) {
       $('dBar').style.width = (i * 50) + '%';
       $('dTitle').textContent = steps[i][0]; $('dSub').textContent = steps[i][1]; this.fb('');
-      this.setPhase('sing'); $('dReplay').disabled = true;
+      this.setPhase('sing'); $('dReplay').disabled = true; this.coach(i ? 'oo' : 'ah', 'Slide, then hold', 'acc');
       const m = await this.capture();
       if (m == null || !this.alive(tok)) return;
       got.push(m); this.fb((i ? 'Highest: ' : 'Lowest: ') + nn(m), 'good');
@@ -962,8 +1205,10 @@ const D = {
       return;
     }
     const tr = b - a >= 9 ? [a + 1, b - 1] : [a, b];
-    S.range = tr; S.voice = 'Measured'; save();
-    this.end(0, 0, [['Comfortable range', nn(a) + ' – ' + nn(b)], ['Drills will use', nn(tr[0]) + ' – ' + nn(tr[1])], ['Span', (tr[1] - tr[0]) + ' semitones']], 'range', '<small>Saved</small>');
+    S.range = tr; S.voice = 'Measured'; if (S.comfort == null || S.comfort < tr[0] || S.comfort > tr[1]) S.comfort = Math.round((tr[0] + tr[1]) / 2); save();
+    const nl = nextLesson();
+    this.end(0, 0, [['Comfortable range', nn(a) + ' – ' + nn(b)], ['Drills will use', nn(tr[0]) + ' – ' + nn(tr[1])], ['Span', (tr[1] - tr[0]) + ' semitones']], 'range', '<small>Saved</small>',
+      '<div class="endbtns"><button class="btn ghost" data-act="d-close">Done</button>' + (nl ? '<button class="btn" data-act="lesson" data-id="' + nl.id + '">Next: ' + nl.name + '</button>' : '<button class="btn" data-act="start" data-kind="range">Measure again</button>') + '</div>');
   },
   capture(){
     return new Promise(res => {
@@ -977,6 +1222,7 @@ const D = {
           held = steady ? held + dt : Math.max(0, held - dt);
         }
         this.readout(m, null, held / 1300);
+        this.coachDir(m == null ? 'Make the sound now' : held > 0 ? 'Hold it…' : 'Settle on one note', m == null ? 'acc' : held > 0 ? 'good' : 'near');
         if (held >= 1300 && !done) { done = true; this.cancelSing = null; Engine.handler = null; res(median(win)); }
       };
     });
@@ -984,7 +1230,7 @@ const D = {
   replay(){
     if (this.phase === 'listen' || !this.item) return;
     if (this.kind === 'hl' || this.kind === 'idq') { const [a, b] = this.item.pair; Audio.play([[a, .55, .2], [b, .55]]); return; }
-    if (this.kind === 'range') return;
+    if (this.kind === 'range' || this.phase === 'result') return;
     this.playRef(this.item);
   },
   skip(){
@@ -1046,7 +1292,7 @@ function renderTrain(){
   const today = S.days[dayKey()] || {n:0, h:0};
   const wk = (() => { let n = 0, h = 0; for (let i = 0; i < 7; i++) { const d = new Date(); d.setDate(d.getDate() - i); const x = S.days[dayKey(d)]; if (x) { n += x.n; h += x.h; } } return n ? Math.round(h / n * 100) + '%' : '—'; })();
   const date = new Date().toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'});
-  const has = !!S.range;
+  const has = !!S.range, nl = nextLesson();
   const iv = unlockedIntervals();
   const echoLen = Math.min(6, 3 + Math.floor(S.levels.echo / 2));
   const idqN = Math.min(INTERVALS.length, 4 + S.levels.idq);
@@ -1054,11 +1300,11 @@ function renderTrain(){
   const voiceGrid = VOICES.map((v, i) => '<button class="vbtn" data-act="voice" data-i="' + i + '" aria-pressed="' + (S.voice === v[0]) + '"><b>' + v[0] + '</b><span>' + nn(v[1]) + '–' + nn(v[2]) + '</span></button>').join('');
   $('trainBody').innerHTML =
     '<div class="top"><h1 class="brand"><svg viewBox="0 0 34 24" aria-hidden="true"><rect x="1" y="9" width="32" height="7" rx="3.5" style="fill:var(--accent-soft)"/><path d="M2 4c5 0 6 15 11 10s6-1.5 19-1.5" style="fill:none;stroke:var(--accent);stroke-width:2.6;stroke-linecap:round"/></svg>Pitch Lock</h1><span class="date">' + date + '</span></div>' +
-    (has ? '' :
+    (nl ? lessonCard(nl) : has ? '' :
       '<div class="card" id="rangeCard"><h3>Set your voice range first</h3><p>Every drill picks notes inside this range, so you never strain for targets you can’t reach. Pick the closest voice type or measure it.</p><div class="voices">' + voiceGrid + '</div><button class="btn ghost" data-act="start" data-kind="range">Measure my range</button></div>') +
     '<section class="hero">' +
       '<svg class="trace" viewBox="0 0 240 84" aria-hidden="true"><rect x="96" y="36" width="144" height="12" rx="6" fill="currentColor" opacity=".16"/><path d="M4 14c18 0 20 56 40 52s18-40 34-36 14 12 30 12 20 0 128 0" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity=".6"/></svg>' +
-      '<span class="k">Daily mix</span><h2>12 reps<br>about 5 min</h2><p>Single notes, intervals, and short phrases at your current level.</p>' +
+      '<span class="k">Daily mix</span><h2>12 reps<br>about 5 min</h2><p>' + (S.levels.match < 3 ? 'A siren warm-up, then mostly single notes near your easiest pitch.' : 'Single notes, intervals, and short phrases at your current level.') + '</p>' +
       '<button class="go" data-act="start" data-kind="mix"' + (has ? '' : ' disabled style="opacity:.5"') + '>Start</button>' +
     '</section>' +
     '<div class="statline"><span><b>' + streak() + '</b>-day streak</span><span><b>' + today.n + '</b> reps today</span><span><b>' + wk + '</b> hit rate, 7 days</span></div>' +
@@ -1073,6 +1319,17 @@ function renderTrain(){
       row('idq', 'Name the interval', 'Hear two notes, name the distance.', idqN + ' of 12', false) +
     '</div></div>';
 }
+function lessonCard(nl){
+  const n = LESSONS.filter(l => lessonDone(l.id)).length;
+  return '<section class="card" id="rangeCard"><div class="eyebrow" style="margin:0">Start here · new to singing</div>' +
+    '<h3>' + (n ? n + ' of ' + LESSONS.length + ' lessons done' : 'Five short lessons, about 6 minutes') + '</h3>' +
+    '<p>They teach what the drills assume: making a steady sound, moving it higher and lower on purpose, and matching a note you hear.</p>' +
+    '<ol class="lsn">' + LESSONS.map((l, i) => {
+      const done = lessonDone(l.id), next = l === nl;
+      return '<li><button class="lrow" data-act="lesson" data-id="' + l.id + '"><span class="ck' + (done ? ' done' : next ? ' next' : '') + '">' + (done ? '✓' : i + 1) + '</span><span>' + l.name + '</span><span class="lt mono">' + l.time + '</span></button></li>';
+    }).join('') + '</ol>' +
+    '<button class="btn" data-act="lesson" data-id="' + nl.id + '">' + (n ? 'Continue: ' : 'Start: ') + nl.name + '</button></section>';
+}
 function row(kind, t, d, chip, dis){
   return '<button class="row" data-act="start" data-kind="' + kind + '"' + (dis ? ' disabled' : '') + '><div><div class="t">' + t + '</div><div class="d">' + d + '</div></div><span class="chip mono">' + chip + '</span>' + chev + '</button>';
 }
@@ -1081,13 +1338,13 @@ function renderProgress(){
   const days = []; for (let i = 13; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); days.push({d, x:S.days[dayKey(d)] || {n:0, h:0, es:0, en:0}}); }
   const sung = S.attempts.filter(a => a.e != null).slice(-60);
   const bias = mean(sung.map(a => a.e));
-  const ladder = l => '<div class="ladder">' + TOLS.map((t, i) => '<i class="' + (i <= l ? 'f' : '') + '"></i>').join('') + '</div><div class="ladder-l"><span>±50¢</span><span>±10¢</span></div>';
+  const ladder = l => '<div class="ladder">' + TOLS.map((t, i) => '<i class="' + (i <= l ? 'f' : '') + '"></i>').join('') + '</div><div class="ladder-l"><span>±100¢</span><span>±10¢</span></div>';
   const lastEar = S.ear.length ? S.ear[S.ear.length - 1].thr : null, bestEar = S.ear.length ? Math.min(...S.ear.map(x => x.thr)) : null;
   const total = S.attempts.length;
   $('progBody').innerHTML =
     '<div class="top"><h1 class="h-page">Progress</h1><span class="date mono">' + total + ' reps logged</span></div>' +
     '<div class="card"><div class="prog-row"><span class="t">Match tolerance</span><span class="v">±' + tolFor('match') + '¢</span></div>' + ladder(S.levels.match) +
-      '<p>The band tightens after 4 hits in 5 tries and loosens after 3 misses. A tighter band is the real measure of progress; your hit rate will hover near 70% by design.</p></div>' +
+      '<p>The band is how close counts as a hit; 100¢ is one semitone (one piano key). It tightens after 4 hits in 5 tries and widens after 3 misses. A tighter band is the real measure of progress; your hit rate will hover near 70% by design.</p></div>' +
     '<div class="card"><div class="prog-row"><span class="t">Intervals unlocked</span><span class="v">' + unlockedIntervals().length + ' / 12</span></div>' +
       '<div class="prog-row"><span class="t">Interval tolerance</span><span class="v">±' + tolFor('interval') + '¢</span></div>' +
       '<div class="prog-row"><span class="t">Phrase length</span><span class="v">' + Math.min(6, 3 + Math.floor(S.levels.echo / 2)) + ' notes · ±' + tolFor('echo') + '¢</span></div>' +
@@ -1140,10 +1397,21 @@ function renderSettings(){
       '<button class="btn ghost" data-act="start" data-kind="range">' + (S.voice === 'Measured' ? 'Measure again' : 'Measure my range') + '</button></div>' +
     '<div><p class="eyebrow">Practice</p><div class="list">' +
       sw('strictOctave', 'Strict octave', 'Off: the right note sung an octave away still counts, and the app tells you. On: it has to be the exact octave.') +
-      sw('headphones', 'Headphones mode', 'Keeps listening while tones play, so you can sing along with the drone. Only with headphones.') +
+      '<div class="set"><div><div class="t">Sound to sing</div><div class="d">Auto picks the easiest vowel for each note: “oh” low, “ah” middle, “oo” high.</div></div><div class="seg">' +
+        [['auto', 'Auto'], ['hum', 'Hum'], ['oo', 'Oo'], ['ah', 'Ah']].map(([v, l]) => '<button data-act="sound" data-v="' + v + '" aria-pressed="' + (S.sound === v) + '">' + l + '</button>').join('') + '</div></div>' +
+      sw('headphones', 'Headphones mode', 'Keeps listening while tones play. Only with headphones; on the speaker the mic would hear the app.') +
+      (S.headphones ? sw('guide', 'Guide tone while singing', 'Plays the target softly while you sing, so you can tune against it. Turn off once you want the real test.') : '') +
       '<div class="set"><div><div class="t">Reference tone</div><div class="d">How long single target notes play.</div></div><div class="seg">' +
         segv.map(v => '<button data-act="refdur" data-v="' + v + '" aria-pressed="' + (S.refDur === v) + '">' + v.toFixed(1) + 's</button>').join('') + '</div></div>' +
     '</div></div>' +
+    '<div class="card"><h3>How to read a drill</h3><ul class="help">' +
+      '<li><i style="background:var(--accent-soft);border:2px solid var(--accent)"></i><span><b>Orange band</b> is the target note. Wider band, easier hit.</span></li>' +
+      '<li><i style="background:var(--good)"></i><span><b>Green line</b>: you’re in the band. Hold it until the ring fills.</span></li>' +
+      '<li><i style="background:var(--near)"></i><span><b>Yellow</b>: close. Nudge the way the coach says.</span></li>' +
+      '<li><i style="background:var(--off)"></i><span><b>Red</b>: far off. Slide up or down until it changes color.</span></li>' +
+      '<li><i style="background:var(--surface-2)"></i><span><b>Note names</b> like A3: letter is the note, number is the octave; bigger is higher. <b>¢</b> (cents): 100¢ is one semitone, one piano key.</span></li>' +
+    '</ul></div>' +
+    '<div><p class="eyebrow">Lessons</p><div class="list">' + LESSONS.map((l, i) => '<button class="row" data-act="lesson" data-id="' + l.id + '"><div><div class="t">' + (i + 1) + '. ' + l.name + '</div><div class="d">' + (lessonDone(l.id) ? 'Done · tap to redo' : 'Not done yet') + '</div></div><span class="chip mono">' + l.time + '</span>' + chev + '</button>').join('') + '</div></div>' +
     '<div><p class="eyebrow">iPhone tips</p><ol class="tips">' +
       '<li>Wired earbuds or AirPods give the cleanest result. On the speaker, iOS may lower playback volume while the mic is on.</li>' +
       '<li>If you hear nothing, flip the Ring/Silent switch to Ring or raise the volume.</li>' +
@@ -1168,6 +1436,7 @@ const ACTS = {
   tab: b => go(b.dataset.tab),
   start: b => {
     const k = b.dataset.kind;
+    if (!$('drill').hidden) D.close();
     if (k === 'hl') return D.runHL();
     if (k === 'idq') return D.runIDQ();
     if (k === 'range') return D.runRange();
@@ -1177,6 +1446,9 @@ const ACTS = {
   voice: b => { const v = VOICES[+b.dataset.i]; S.range = [v[1], v[2]]; S.voice = v[0]; Tuner.note = Math.round((v[1] + v[2]) / 2); save(); if (tab === 'settings') renderSettings(); else renderTrain(); },
   toggle: b => { const k = b.dataset.key; S[k] = !S[k]; save(); renderSettings(); },
   refdur: b => { S.refDur = +b.dataset.v; save(); renderSettings(); },
+  sound: b => { S.sound = b.dataset.v; save(); renderSettings(); },
+  lesson: b => { if (!$('drill').hidden) D.close(); D.runLesson(b.dataset.id); },
+  'd-go': () => { if (D.goRes) D.goRes(true); },
   reset: () => {
     if (!resetArmed) { resetArmed = setTimeout(() => { resetArmed = 0; if (tab === 'settings') renderSettings(); }, 3000); renderSettings(); return; }
     clearTimeout(resetArmed); resetArmed = 0;

@@ -1,5 +1,5 @@
 // Network-first so updates land immediately; cache fallback so it opens offline.
-const C = 'pitchlock-v1';
+const C = 'pitchlock-v2';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(ASSETS))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
