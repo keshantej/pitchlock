@@ -1,0 +1,1209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Pitch Lock">
+<meta name="theme-color" content="#F3F4F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1120" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Pitch Lock</title>
+<style>
+/* Layout: one-thumb iOS shell — scrolling view + bottom tab bar; drills open as a full-screen sheet built around a scrolling pitch lane. */
+:root{
+  --bg:#F3F4F8; --surface:#FFFFFF; --surface-2:#E7E9F1; --ink:#141729; --ink-2:#5D627A; --line:#DADDE7;
+  --accent:#DD4A17; --accent-ink:#FFFFFF; --accent-soft:rgba(221,74,23,.15);
+  --good:#0F956B; --near:#BC7E05; --off:#D23A40;
+  --lane-bg:#E9EBF3; --lane-line:#D5D8E3; --lane-c:#AEB3C7;
+  --font: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1120; --surface:#171B2E; --surface-2:#22273F; --ink:#ECEEF8; --ink-2:#9298B2; --line:#2A2F49;
+    --accent:#FF6A3D; --accent-ink:#1C0B04; --accent-soft:rgba(255,106,61,.17);
+    --good:#36CB96; --near:#F2B83F; --off:#FF5E63;
+    --lane-bg:#12152A; --lane-line:#22273F; --lane-c:#3A4064;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1120; --surface:#171B2E; --surface-2:#22273F; --ink:#ECEEF8; --ink-2:#9298B2; --line:#2A2F49;
+  --accent:#FF6A3D; --accent-ink:#1C0B04; --accent-soft:rgba(255,106,61,.17);
+  --good:#36CB96; --near:#F2B83F; --off:#FF5E63;
+  --lane-bg:#12152A; --lane-line:#22273F; --lane-c:#3A4064;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 var(--font);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+.app{display:flex;flex-direction:column;height:100%}
+.view{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-top:calc(env(safe-area-inset-top,0px) + 14px);padding-bottom:28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+
+.tabbar{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:var(--surface);padding-top:6px;padding-bottom:calc(4px + env(safe-area-inset-bottom,0px));padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
+.tab{appearance:none;border:0;background:none;color:var(--ink-2);font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0}
+.tab svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab[aria-selected="true"]{color:var(--accent)}
+
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em}
+.brand svg{width:34px;height:24px}
+.h-page{margin:0;font-size:28px;font-weight:800;letter-spacing:-.02em}
+.date{color:var(--ink-2);font-size:14px}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin:0 0 8px 4px}
+
+.hero{position:relative;overflow:hidden;background:var(--accent);color:var(--accent-ink);border-radius:22px;padding:20px 20px 18px;display:flex;flex-direction:column;gap:6px}
+.hero .k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+.hero h2{margin:0;font-size:30px;line-height:1.05;font-weight:800;letter-spacing:-.02em;text-wrap:balance}
+.hero p{margin:0;font-size:15px;opacity:.9;max-width:28ch}
+.hero svg.trace{position:absolute;right:-4px;bottom:14px;width:52%;max-width:230px;height:62px;opacity:.9;pointer-events:none}
+.hero .go{margin-top:12px;align-self:flex-start;appearance:none;border:0;background:var(--ink);color:var(--bg);border-radius:14px;padding:13px 26px;font-size:17px;font-weight:700}
+.statline{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px;color:var(--ink-2);padding:0 4px}
+.statline b{color:var(--ink);font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
+
+.list{background:var(--surface);border-radius:16px;overflow:hidden}
+.row{appearance:none;border:0;background:none;width:100%;text-align:left;display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:14px 16px}
+.row + .row{border-top:1px solid var(--line)}
+.row .t{font-size:17px;font-weight:650}
+.row .d{font-size:14px;color:var(--ink-2);margin-top:2px}
+.row .chev{width:8px;height:14px;stroke:var(--ink-2);stroke-width:2;fill:none}
+.row:disabled{opacity:.45}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;background:var(--surface-2);color:var(--ink);font-size:13px;font-weight:600;white-space:nowrap}
+.chip.acc{background:var(--accent-soft);color:var(--accent)}
+
+.card{background:var(--surface);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.card h3{margin:0;font-size:19px;font-weight:750}
+.card p{margin:0;color:var(--ink-2);font-size:15px}
+.voices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.vbtn{appearance:none;border:1.5px solid var(--line);background:var(--bg);border-radius:12px;padding:9px 6px;display:flex;flex-direction:column;align-items:center;gap:1px}
+.vbtn b{font-size:15px}
+.vbtn span{font-size:12px;color:var(--ink-2);font-family:var(--mono)}
+.vbtn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.rangeline{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--surface);border-radius:16px;padding:12px 16px}
+.rangeline .v{font-family:var(--mono);font-size:17px;font-weight:600}
+.flash{animation:flash 1s ease 2}
+@keyframes flash{50%{box-shadow:0 0 0 3px var(--accent)}}
+
+.btn{appearance:none;border:0;border-radius:14px;padding:14px 18px;font-size:17px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:var(--surface-2);color:var(--ink)}
+.btn.small{padding:9px 14px;font-size:15px;border-radius:11px}
+.btn:disabled{opacity:.4}
+.linkbtn{appearance:none;border:0;background:none;color:var(--accent);font-weight:650;font-size:15px;padding:6px 0}
+
+/* Drill sheet */
+.drill{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;flex-direction:column;gap:10px;padding-top:calc(env(safe-area-inset-top,0px) + 8px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 12px);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.drill > *{width:100%;max-width:560px;margin-left:auto;margin-right:auto}
+.dh{display:flex;align-items:center;gap:12px}
+.icon-btn{appearance:none;border:0;background:var(--surface-2);width:38px;height:38px;border-radius:50%;display:grid;place-items:center;flex:none}
+.icon-btn svg{width:16px;height:16px;stroke:var(--ink);stroke-width:2.4;stroke-linecap:round}
+.dtitle{flex:1;min-width:0;display:flex;flex-direction:column}
+.dtitle b{font-size:16px}
+.dtitle span{font-size:13px;color:var(--ink-2)}
+.pbar{height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden}
+.pbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s ease}
+.dmain{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+.phase{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:26px}
+.phase-chip[data-p="sing"]{background:var(--accent);color:var(--accent-ink)}
+.dots{display:flex;gap:7px}
+.dot{width:11px;height:11px;border-radius:50%;background:var(--surface-2);transition:background .2s}
+.dot.on{background:var(--accent)}
+.dot.hit{background:var(--good)}
+.dot.miss{background:var(--off)}
+.prompt{margin:0;font-size:26px;line-height:1.15;font-weight:800;letter-spacing:-.015em;text-wrap:balance}
+.dsub{margin:-4px 0 0;color:var(--ink-2);font-size:15px;min-height:1.4em;text-wrap:pretty}
+.lane-mode{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+.lane-wrap{position:relative;flex:1;min-height:180px;border-radius:18px;overflow:hidden;background:var(--lane-bg)}
+.lane-wrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.readout{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.big-note{font-size:52px;line-height:1;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;min-width:3ch}
+.cents{font-size:17px;font-weight:600;min-height:1.3em;margin-top:4px}
+.ring{width:64px;height:64px;transform:rotate(-90deg);flex:none}
+.ring circle{fill:none;stroke-width:7}
+.ring-bg{stroke:var(--surface-2)}
+.ring-fg{stroke:var(--good);stroke-linecap:round;stroke-dasharray:169.65;stroke-dashoffset:169.65;transition:stroke-dashoffset .06s linear}
+.fb{margin:0;min-height:1.5em;font-size:16px;font-weight:650;text-wrap:balance}
+.fb.good{color:var(--good)} .fb.off{color:var(--off)} .fb.acc{color:var(--accent)}
+.dctrl{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.choice-mode{flex:1;display:flex;flex-direction:column;justify-content:center;gap:22px}
+.c-big{text-align:center;font-size:20px;color:var(--ink-2);min-height:1.5em}
+.c-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.c-btns .btn{padding:22px 10px;font-size:18px;background:var(--surface);color:var(--ink);border:1.5px solid var(--line)}
+.c-btns .btn.right{background:var(--good);border-color:var(--good);color:var(--bg)}
+.c-btns .btn.wrong{background:var(--off);border-color:var(--off);color:var(--bg)}
+.dend{flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px}
+.score{font-size:76px;font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.score small{font-size:28px;color:var(--ink-2);font-weight:700}
+.kv{display:flex;flex-direction:column;background:var(--surface);border-radius:16px;overflow:hidden}
+.kv div{display:flex;justify-content:space-between;gap:12px;padding:13px 16px;font-size:15px}
+.kv div + div{border-top:1px solid var(--line)}
+.kv span{color:var(--ink-2)}
+.kv b{font-family:var(--mono);font-weight:600;text-align:right}
+.endbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* Tuner */
+.tuner .lane-wrap{flex:none;height:min(48vh,420px)}
+.lane-idle{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center;background:var(--lane-bg)}
+.lane-idle p{margin:0;color:var(--ink-2);font-size:14px;max-width:30ch}
+.t-read{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:16px}
+.meter{position:relative;height:44px}
+.meter .scale{position:absolute;left:0;right:0;top:20px;height:4px;border-radius:2px;background:var(--surface-2)}
+.meter .mid{position:absolute;left:50%;top:10px;width:2px;height:24px;margin-left:-1px;background:var(--ink-2);border-radius:1px}
+.meter .lbl{position:absolute;top:30px;font-size:11px;color:var(--ink-2);font-family:var(--mono)}
+.meter i{position:absolute;top:12px;width:14px;height:20px;margin-left:-7px;border-radius:7px;background:var(--ink-2);left:50%;transition:left .08s linear,background .15s}
+.drone{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border-radius:16px;padding:12px 14px;flex-wrap:wrap}
+.drone .l{font-weight:650}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{appearance:none;border:0;background:var(--surface-2);width:34px;height:34px;border-radius:10px;font-size:20px;font-weight:700;line-height:1}
+.stepper span{min-width:3.6ch;text-align:center;font-size:17px;font-weight:600}
+.note{margin:0;color:var(--ink-2);font-size:14px;padding:0 4px;text-wrap:pretty}
+.warn{color:var(--near)}
+
+/* Progress */
+.ladder{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.ladder i{height:10px;border-radius:3px;background:var(--surface-2)}
+.ladder i.f{background:var(--accent)}
+.ladder-l{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-2);font-family:var(--mono);margin-top:4px}
+.prog-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.prog-row .t{font-weight:650}
+.prog-row .v{font-family:var(--mono);font-weight:600}
+.chart svg{width:100%;height:auto;display:block}
+.chart text{font-family:var(--mono);font-size:10px;fill:var(--ink-2)}
+.empty{color:var(--ink-2);font-size:14px;margin:0}
+
+/* Settings */
+.set{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px}
+.set + .set{border-top:1px solid var(--line)}
+.set .t{font-weight:650}
+.set .d{font-size:13px;color:var(--ink-2);margin-top:2px;max-width:40ch}
+.switch{appearance:none;border:0;flex:none;width:51px;height:31px;border-radius:16px;background:var(--surface-2);position:relative;transition:background .2s}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.switch[aria-checked="true"]{background:var(--good)}
+.switch[aria-checked="true"]::after{transform:translateX(20px)}
+.seg{display:flex;background:var(--surface-2);border-radius:10px;padding:2px;flex:none}
+.seg button{appearance:none;border:0;background:none;padding:6px 10px;border-radius:8px;font-size:14px;font-weight:600;font-family:var(--mono)}
+.seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tips{margin:0;padding:0 4px 0 22px;color:var(--ink-2);font-size:14px;display:flex;flex-direction:column;gap:8px}
+.danger{color:var(--off)}
+
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+@media (max-height:640px){.big-note{font-size:40px}.prompt{font-size:22px}.lane-wrap{min-height:140px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <main id="v-train" class="view"><div class="wrap" id="trainBody"></div></main>
+
+  <main id="v-tuner" class="view" hidden>
+    <div class="wrap tuner">
+      <div class="top"><h1 class="h-page">Tuner</h1><span class="date">Sing anything</span></div>
+      <div class="lane-wrap"><canvas id="tLane"></canvas>
+        <div id="tIdle" class="lane-idle">
+          <button class="btn" data-act="tuner-start">Start listening</button>
+          <p>Uses the microphone live. Nothing is recorded or sent anywhere.</p>
+        </div>
+      </div>
+      <div class="t-read">
+        <div><div id="tNote" class="big-note">—</div><div id="tHz" class="mono cents">&nbsp;</div></div>
+        <div class="meter" aria-hidden="true">
+          <div class="scale"></div><div class="mid"></div>
+          <span class="lbl" style="left:0">−50¢</span><span class="lbl" style="right:0">+50¢</span>
+          <i id="tNeedle"></i>
+        </div>
+      </div>
+      <div class="drone">
+        <span class="l">Reference drone</span>
+        <div class="stepper"><button data-act="drone-down" aria-label="Lower">−</button><span id="droneNote" class="mono">A3</span><button data-act="drone-up" aria-label="Higher">+</button></div>
+        <button id="droneBtn" class="btn ghost small" data-act="drone-toggle">Play</button>
+      </div>
+      <p id="droneWarn" class="note warn" hidden>On the speaker, the mic hears the drone as well as you. Use headphones and switch on Headphones mode in Settings.</p>
+      <p class="note">Warm-up: slide slowly from your lowest note to your highest and back. Then hold single notes and try to keep the line flat.</p>
+    </div>
+  </main>
+
+  <main id="v-progress" class="view" hidden><div class="wrap" id="progBody"></div></main>
+  <main id="v-settings" class="view" hidden><div class="wrap" id="setBody"></div></main>
+
+  <nav class="tabbar" role="tablist">
+    <button class="tab" role="tab" data-act="tab" data-tab="train" aria-selected="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>Train</button>
+    <button class="tab" role="tab" data-act="tab" data-tab="tuner" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M2 12h3l2-6 3 12 3-9 2 6 2-3h5"/></svg>Tuner</button>
+    <button class="tab" role="tab" data-act="tab" data-tab="progress" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M5 20V12M10 20V6M15 20v-9M20 20V4"/></svg>Progress</button>
+    <button class="tab" role="tab" data-act="tab" data-tab="settings" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</button>
+  </nav>
+</div>
+
+<section id="drill" class="drill" role="dialog" aria-modal="true" aria-labelledby="dTitle" hidden>
+  <div class="dh">
+    <button class="icon-btn" data-act="d-close" aria-label="End session"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button>
+    <div class="dtitle"><b id="dName">Daily mix</b><span id="dCount" class="mono">1 of 12</span></div>
+    <span id="dTol" class="chip mono">±50¢</span>
+  </div>
+  <div class="pbar"><i id="dBar"></i></div>
+  <div id="dMain" class="dmain">
+    <div class="phase"><span id="dPhase" class="chip phase-chip" data-p="listen">Listen</span><div id="dDots" class="dots"></div></div>
+    <h2 id="dTitle" class="prompt">Match the note</h2>
+    <p id="dSub" class="dsub"></p>
+    <div id="laneMode" class="lane-mode">
+      <div class="lane-wrap"><canvas id="dLane"></canvas></div>
+      <div class="readout">
+        <div><div id="rNote" class="big-note">—</div><div id="rCents" class="mono cents">&nbsp;</div></div>
+        <svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" class="ring-bg"/><circle id="ringFg" cx="32" cy="32" r="27" class="ring-fg"/></svg>
+      </div>
+    </div>
+    <div id="choiceMode" class="choice-mode" hidden>
+      <div id="cBig" class="c-big mono"></div>
+      <div id="cBtns" class="c-btns"></div>
+    </div>
+    <p id="dFb" class="fb" aria-live="polite"></p>
+    <div class="dctrl"><button id="dReplay" class="btn ghost" data-act="d-replay">Replay</button><button id="dSkip" class="btn ghost" data-act="d-skip">Skip</button></div>
+  </div>
+  <div id="dEnd" class="dend" hidden></div>
+</section>
+
+<script>
+'use strict';
+/* ---------- constants ---------- */
+const KEY = 'pitchlock.v1';
+const TOLS = [50, 40, 30, 25, 20, 15, 10];
+const NOTE = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const VOICES = [['Bass',41,60],['Baritone',45,64],['Tenor',48,67],['Alto',53,72],['Mezzo',57,76],['Soprano',60,79]];
+// Order = unlock order (easiest-to-hear first). Cues are first-notes references, ascending.
+const INTERVALS = [
+  {s:7,  n:'perfect 5th', cue:'“Twinkle, Twinkle” (notes 2→3)'},
+  {s:12, n:'octave',      cue:'“Over the Rainbow” (notes 1→2)'},
+  {s:4,  n:'major 3rd',   cue:'“When the Saints” (notes 1→2)'},
+  {s:5,  n:'perfect 4th', cue:'“Here Comes the Bride” (notes 1→2)'},
+  {s:3,  n:'minor 3rd',   cue:'“Greensleeves” (notes 1→2)'},
+  {s:2,  n:'major 2nd',   cue:'“Happy Birthday” (notes 2→3)'},
+  {s:9,  n:'major 6th',   cue:'“My Bonnie” (notes 1→2)'},
+  {s:10, n:'minor 7th',   cue:'“Somewhere” from West Side Story (notes 1→2)'},
+  {s:1,  n:'minor 2nd',   cue:'the “Jaws” theme'},
+  {s:8,  n:'minor 6th',   cue:'“The Entertainer” (notes 3→4)'},
+  {s:11, n:'major 7th',   cue:'“Take On Me” chorus (notes 1→2)'},
+  {s:6,  n:'tritone',     cue:'“Maria” from West Side Story (notes 1→2)'}
+];
+const MAXL = {match:6, interval:9, echo:8, idq:8};
+const MIX = ['match','match','interval','match','echo','interval','match','interval','echo','match','interval','echo'];
+const MAJ = [0,2,4,5,7,9,11];
+
+/* ---------- state ---------- */
+const S = load();
+function load(){
+  const d = {range:null, voice:null, strictOctave:false, headphones:false, refDur:1.2,
+    levels:{match:0, interval:0, echo:0, idq:0}, win:{match:[], interval:[], echo:[]},
+    attempts:[], days:{}, ear:[], sessions:[]};
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
+  if (!s || typeof s !== 'object') return d;
+  for (const k in d) if (!(k in s)) s[k] = d[k];
+  for (const k in d.levels) if (!(k in s.levels)) s.levels[k] = 0;
+  for (const k in d.win) if (!(k in s.win)) s.win[k] = [];
+  return s;
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const nn = m => { const r = Math.round(m); return NOTE[((r % 12) + 12) % 12] + (Math.floor(r / 12) - 1); };
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+const toMidi = f => 69 + 12 * Math.log2(f / 440);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const dayKey = (d = new Date()) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const median = a => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y), n = s.length; return n % 2 ? s[n >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+const fmtC = c => (Math.round(c) > 0 ? '+' : Math.round(c) < 0 ? '−' : '±') + Math.abs(Math.round(c)) + '¢';
+const lean = c => Math.abs(c) < 3 ? 'dead center' : Math.abs(Math.round(c)) + '¢ ' + (c > 0 ? 'sharp' : 'flat');
+const R = () => S.range || [48, 67];
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = rand(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+function tolFor(d){
+  if (d === 'match') return TOLS[S.levels.match];
+  if (d === 'interval') return TOLS[Math.min(6, Math.floor(S.levels.interval / 2))];
+  return TOLS[Math.min(6, Math.floor(S.levels.echo / 2))];
+}
+const unlockedIntervals = () => INTERVALS.slice(0, Math.min(INTERVALS.length, 3 + S.levels.interval));
+
+/* ---------- audio ---------- */
+const Audio = {
+  ctx:null, master:null, stream:null, analyser:null, buf:null, busyUntil:0, live:[], _w:null, _drone:null,
+  async init(needMic){
+    if (needMic) { try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch(e){} }
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC({latencyHint:'interactive'});
+      const comp = this.ctx.createDynamicsCompressor();
+      this.master = this.ctx.createGain(); this.master.gain.value = 0.95;
+      this.master.connect(comp); comp.connect(this.ctx.destination);
+    }
+    if (this.ctx.state !== 'running') await this.ctx.resume();
+    if (needMic && !this.stream) {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { const e = new Error('insecure'); e.name = 'Insecure'; throw e; }
+      this.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+      const src = this.ctx.createMediaStreamSource(this.stream);
+      this.analyser = this.ctx.createAnalyser();
+      this.analyser.fftSize = 2048;
+      src.connect(this.analyser);
+      this.buf = new Float32Array(this.analyser.fftSize);
+      if (this.ctx.state !== 'running') await this.ctx.resume();
+    }
+  },
+  releaseMic(){
+    if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+    this.stream = null; this.analyser = null;
+  },
+  wave(){
+    if (!this._w) {
+      const amps = [0, 1, .55, .34, .22, .14, .09, .06, .04];
+      const re = new Float32Array(amps.length), im = new Float32Array(amps);
+      this._w = this.ctx.createPeriodicWave(re, im);
+    }
+    return this._w;
+  },
+  // Harmonic-rich tone: phone speakers can't reproduce low fundamentals, the upper partials carry the pitch.
+  tone(m, dur, delay = 0, vel = 1){
+    const c = this.ctx, t0 = c.currentTime + 0.04 + delay;
+    const o = c.createOscillator(), g = c.createGain();
+    o.setPeriodicWave(this.wave()); o.frequency.value = hz(m);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(.34 * vel, t0 + .02);
+    g.gain.exponentialRampToValueAtTime(.24 * vel, t0 + Math.min(.25, dur * .5));
+    g.gain.setValueAtTime(.24 * vel, Math.max(t0 + Math.min(.25, dur * .5), t0 + dur - .08));
+    g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t0); o.stop(t0 + dur + .05);
+    this.live.push(o); o.onended = () => { this.live = this.live.filter(x => x !== o); };
+    this.busyUntil = Math.max(this.busyUntil, t0 + dur);
+    return t0 + dur;
+  },
+  async play(seq){ // seq: [[midi, dur, gapAfter], ...]
+    let at = 0, end = 0;
+    for (const [m, d, gap = 0] of seq) { end = this.tone(m, d, at); at += d + gap; }
+    await sleep(Math.max(0, (end - this.ctx.currentTime) * 1000) + 140);
+  },
+  isPlaying(){ return !!this.ctx && this.ctx.currentTime < this.busyUntil + 0.12; },
+  stopAll(){
+    for (const o of this.live) { try { o.stop(); } catch(e){} }
+    this.live = []; this.busyUntil = 0; this.stopDrone();
+  },
+  drone(m){
+    this.stopDrone();
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.setPeriodicWave(this.wave()); o.frequency.value = hz(m);
+    g.gain.setValueAtTime(0, c.currentTime); g.gain.linearRampToValueAtTime(.2, c.currentTime + .15);
+    o.connect(g); g.connect(this.master); o.start();
+    this._drone = {o, g};
+  },
+  setDrone(m){ if (this._drone) this._drone.o.frequency.setTargetAtTime(hz(m), this.ctx.currentTime, .03); },
+  stopDrone(){
+    const d = this._drone; if (!d) return;
+    const t = this.ctx.currentTime;
+    d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(d.g.gain.value, t); d.g.gain.linearRampToValueAtTime(0, t + .1);
+    d.o.stop(t + .12); this._drone = null;
+  }
+};
+
+/* ---------- pitch detection: YIN on a 2x-decimated frame ---------- */
+const GATE = 0.0035;
+let DEC = null, DIFF = null;
+function detect(buf, sr){
+  const n = buf.length >> 1;
+  if (!DEC || DEC.length !== n) DEC = new Float32Array(n);
+  const x = DEC; let e = 0;
+  for (let i = 0; i < n; i++) { const v = (buf[2 * i] + buf[2 * i + 1]) * .5; x[i] = v; e += v * v; }
+  const rms = Math.sqrt(e / n);
+  if (rms < GATE) return {f:0, rms};
+  const fs = sr / 2;
+  const tauMin = Math.max(2, Math.floor(fs / 1100));
+  const tauMax = Math.min(Math.floor(fs / 60), n >> 1);
+  const W = n - tauMax;
+  if (!DIFF || DIFF.length !== tauMax + 2) DIFF = new Float32Array(tauMax + 2);
+  const d = DIFF; d[0] = 1; let run = 0;
+  for (let tau = 1; tau <= tauMax; tau++) {
+    let s = 0;
+    for (let i = 0; i < W; i++) { const q = x[i] - x[i + tau]; s += q * q; }
+    run += s; d[tau] = run > 0 ? s * tau / run : 1;
+  }
+  let tau = -1;
+  for (let t = tauMin; t <= tauMax; t++) {
+    if (d[t] < 0.15) { while (t + 1 <= tauMax && d[t + 1] < d[t]) t++; tau = t; break; }
+  }
+  if (tau < 0) return {f:0, rms};
+  let bt = tau;
+  if (tau > 1 && tau < tauMax) {
+    const a = d[tau - 1], b = d[tau], c = d[tau + 1], den = a + c - 2 * b;
+    if (den > 0) bt = tau + (a - c) / (2 * den);
+  }
+  return {f: fs / bt, rms, clarity: 1 - d[tau]};
+}
+const Tracker = {
+  h:[], last:null, miss:0, jump:0,
+  reset(){ this.h.length = 0; this.last = null; this.miss = 0; this.jump = 0; },
+  push(r){
+    if (!r.f) { if (++this.miss > 3) { this.h.length = 0; this.last = null; } return null; }
+    this.miss = 0;
+    const m = toMidi(r.f);
+    if (this.last != null && Math.abs(Math.abs(m - this.last) - 12) < 0.8 && this.jump < 3) { this.jump++; return this.last; }
+    this.jump = 0;
+    this.h.push(m); if (this.h.length > 5) this.h.shift();
+    this.last = median(this.h);
+    return this.last;
+  }
+};
+
+/* ---------- colors for canvas ---------- */
+let COL = null;
+function colors(){
+  if (!COL) {
+    const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
+    COL = {bg:v('--lane-bg'), line:v('--lane-line'), c:v('--lane-c'), ink:v('--ink'), ink2:v('--ink-2'), acc:v('--accent'),
+      accSoft:v('--accent-soft'), good:v('--good'), near:v('--near'), off:v('--off'), mono:v('--mono')};
+  }
+  return COL;
+}
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { COL = null; }); } catch(e){}
+
+/* ---------- pitch lane ---------- */
+class Lane {
+  constructor(cv){ this.cv = cv; this.g = cv.getContext('2d'); this.tr = []; this.span = 4500; this.center = 57; this.half = 6;
+    this.targets = []; this.active = -1; this.tol = 50; this.ghost = null; this.follow = false; this.w = 0; this.h = 0; this.lastV = null; }
+  fit(){
+    const r = this.cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    if (!r.width || !r.height) { this.w = 0; return; }
+    this.cv.width = Math.round(r.width * d); this.cv.height = Math.round(r.height * d);
+    this.g.setTransform(d, 0, 0, d, 0, 0); this.w = r.width; this.h = r.height;
+  }
+  frame(targets, ghost){
+    const pts = targets.concat(ghost != null ? [ghost] : []);
+    if (!pts.length) return;
+    const lo = Math.min(...pts), hi = Math.max(...pts);
+    this.center = (lo + hi) / 2; this.half = Math.max(6, (hi - lo) / 2 + 3);
+  }
+  push(t, m){
+    this.tr.push({t, m}); if (m != null) this.lastV = m;
+    const cut = t - this.span; while (this.tr.length && this.tr[0].t < cut) this.tr.shift();
+  }
+  y(m){ return this.h / 2 - (m - this.center) * (this.h / (2 * this.half)); }
+  err(m){
+    const t = this.targets[this.active]; if (t == null) return null;
+    let e = (m - t) * 100;
+    if (!S.strictOctave) e -= Math.round(e / 1200) * 1200;
+    return e;
+  }
+  col(m, C){
+    const e = this.err(m); if (e == null) return C.ink;
+    const a = Math.abs(e); return a <= this.tol ? C.good : a <= this.tol * 2.5 ? C.near : C.off;
+  }
+  draw(now){
+    if (!this.w) this.fit(); if (!this.w) return;
+    const g = this.g, w = this.w, h = this.h, C = colors(), L = 34;
+    if (this.follow && this.lastV != null && Math.abs(this.lastV - this.center) > this.half * .45) this.center += (this.lastV - this.center) * .06;
+    g.fillStyle = C.bg; g.fillRect(0, 0, w, h);
+    g.font = '600 11px ' + C.mono; g.textBaseline = 'middle'; g.textAlign = 'left';
+    const lo = Math.floor(this.center - this.half) - 1, hi = Math.ceil(this.center + this.half) + 1;
+    for (let m = lo; m <= hi; m++) {
+      const y = this.y(m), pc = ((m % 12) + 12) % 12;
+      g.strokeStyle = pc === 0 ? C.c : C.line; g.lineWidth = pc === 0 ? 1.5 : 1;
+      g.beginPath(); g.moveTo(L, y); g.lineTo(w, y); g.stroke();
+      if (MAJ.includes(pc)) { g.fillStyle = C.ink2; g.fillText(nn(m), 7, y); }
+    }
+    if (this.ghost != null) {
+      const y = this.y(this.ghost);
+      g.setLineDash([5, 5]); g.strokeStyle = C.ink2; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(L, y); g.lineTo(w, y); g.stroke(); g.setLineDash([]);
+      g.fillStyle = C.ink2; g.textAlign = 'right'; g.fillText('start ' + nn(this.ghost), w - 8, y - 10); g.textAlign = 'left';
+    }
+    const t = this.targets[this.active];
+    if (t != null) {
+      const y1 = this.y(t + this.tol / 100), y2 = this.y(t - this.tol / 100), yc = this.y(t);
+      g.fillStyle = C.accSoft; g.fillRect(L, y1, w - L, Math.max(3, y2 - y1));
+      g.strokeStyle = C.acc; g.lineWidth = 2; g.beginPath(); g.moveTo(L, yc); g.lineTo(w, yc); g.stroke();
+      g.fillStyle = C.acc; g.textAlign = 'right'; g.font = '700 12px ' + C.mono; g.fillText(nn(t), w - 8, yc - 12); g.textAlign = 'left';
+    }
+    const x0 = w * .8, sx = (x0 - L) / this.span;
+    const cy = y => Math.max(7, Math.min(h - 7, y));
+    g.lineWidth = 3.5; g.lineCap = 'round'; g.lineJoin = 'round';
+    let prev = null, head = null;
+    for (const p of this.tr) {
+      if (p.m == null) { prev = null; continue; }
+      const x = x0 - (now - p.t) * sx, y = cy(this.y(p.m));
+      if (x < L) { prev = {x, y, t:p.t}; continue; }
+      if (prev && p.t - prev.t < 140) {
+        g.strokeStyle = this.col(p.m, C);
+        g.beginPath(); g.moveTo(Math.max(L, prev.x), prev.y); g.lineTo(x, y); g.stroke();
+      }
+      prev = {x, y, t:p.t}; head = {x, y, m:p.m, t:p.t};
+    }
+    if (head && now - head.t < 150) {
+      const c = this.col(head.m, C), raw = this.y(head.m);
+      g.fillStyle = c; g.beginPath(); g.arc(head.x, head.y, 7, 0, 7); g.fill();
+      if (raw < 7 || raw > h - 7) {
+        const up = raw < 7, yy = up ? 4 : h - 4;
+        g.beginPath(); g.moveTo(head.x + 14, yy + (up ? 10 : -10)); g.lineTo(head.x + 20, yy); g.lineTo(head.x + 26, yy + (up ? 10 : -10)); g.closePath(); g.fill();
+      }
+    }
+  }
+}
+
+/* ---------- frame loop ---------- */
+const Engine = {
+  on:false, lane:null, handler:null, last:0,
+  start(){ if (this.on) return; this.on = true; this.last = performance.now(); requestAnimationFrame(() => this.frame()); },
+  stop(){ this.on = false; this.handler = null; this.lane = null; Tracker.reset(); },
+  frame(){
+    if (!this.on) return;
+    const now = performance.now(), dt = Math.min(100, now - this.last); this.last = now;
+    const muted = Audio.isPlaying() && !S.headphones;
+    let m = null;
+    if (Audio.analyser && !muted) { Audio.analyser.getFloatTimeDomainData(Audio.buf); m = Tracker.push(detect(Audio.buf, Audio.ctx.sampleRate)); }
+    else Tracker.reset();
+    if (this.handler) this.handler(m, dt, now, muted);
+    if (this.lane) { this.lane.push(now, m); this.lane.draw(now); }
+    requestAnimationFrame(() => this.frame());
+  }
+};
+
+/* ---------- wake lock ---------- */
+let wake = null;
+async function keepAwake(on){
+  try {
+    if (on && 'wakeLock' in navigator && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); }
+    if (!on && wake) { await wake.release(); wake = null; }
+  } catch(e){}
+}
+
+/* ---------- recording & adaptation ---------- */
+function record(d, ok, err){
+  S.attempts.push({t:Date.now(), d, ok:!!ok, e: err == null ? null : Math.round(err)});
+  if (S.attempts.length > 3000) S.attempts.splice(0, S.attempts.length - 3000);
+  const k = dayKey(), day = S.days[k] || (S.days[k] = {n:0, h:0, es:0, en:0});
+  day.n++; if (ok) day.h++;
+  if (err != null) { day.es += Math.abs(err); day.en++; }
+  let ch = 0;
+  if (S.win[d]) {
+    const w = S.win[d]; w.push(ok ? 1 : 0); if (w.length > 5) w.shift();
+    const hits = w.reduce((a, b) => a + b, 0), miss = w.length - hits;
+    if (w.length >= 5 && hits >= 4 && S.levels[d] < MAXL[d]) { S.levels[d]++; ch = 1; }
+    else if (miss >= 3 && S.levels[d] > 0) { S.levels[d]--; ch = -1; }
+    if (ch) S.win[d] = [];
+  }
+  save();
+  return ch;
+}
+function streak(){
+  let s = 0; const d = new Date();
+  if (!(S.days[dayKey(d)] && S.days[dayKey(d)].n)) d.setDate(d.getDate() - 1);
+  while (S.days[dayKey(d)] && S.days[dayKey(d)].n) { s++; d.setDate(d.getDate() - 1); }
+  return s;
+}
+
+/* ---------- item generators ---------- */
+let lastT = null;
+function genMatch(){
+  const [lo, hi] = R(); let t = rand(lo, hi), g = 0;
+  while (t === lastT && g++ < 10) t = rand(lo, hi);
+  lastT = t;
+  return {type:'match', targets:[t], hold:800, timeout:7000, title:'Match the note', sub:'Target ' + nn(t)};
+}
+function genInterval(){
+  const [lo, hi] = R();
+  let pool = unlockedIntervals().filter(iv => iv.s <= hi - lo);
+  if (!pool.length) pool = [INTERVALS[5]];
+  const iv = pick(pool);
+  const dir = S.levels.interval >= 2 && Math.random() < .4 ? -1 : 1;
+  const root = dir > 0 ? rand(lo, hi - iv.s) : rand(lo + iv.s, hi);
+  const t = root + dir * iv.s;
+  return {type:'interval', root, iv, dir, targets:[t], hold:800, timeout:7000,
+    title:'Sing a ' + iv.n + (dir > 0 ? ' up' : ' down'),
+    sub:'From ' + nn(root) + (dir > 0 ? ' · think ' + iv.cue : '')};
+}
+function genEcho(){
+  const [lo, hi] = R(), lvl = S.levels.echo, len = Math.min(6, 3 + Math.floor(lvl / 2)), leap = lvl >= 3;
+  const tonic = rand(lo, Math.max(lo, hi - 7));
+  const d2m = d => tonic + Math.floor(d / 7) * 12 + MAJ[((d % 7) + 7) % 7];
+  const ok = d => { const m = d2m(d); return m >= lo && m <= hi; };
+  let cur = ok(0) ? 0 : 1; const seq = [cur];
+  for (let k = 1; k < len; k++) {
+    const steps = leap ? [-2, -1, 1, 2, -1, 1] : [-1, 1];
+    const opts = steps.map(s => cur + s).filter(ok);
+    cur = opts.length ? pick(opts) : cur; seq.push(cur);
+  }
+  return {type:'echo', targets:seq.map(d2m), hold:450, timeout:5000, title:'Echo the phrase', sub:len + ' notes. Hold each one until it locks.'};
+}
+const GEN = {match:genMatch, interval:genInterval, echo:genEcho};
+const NAMES = {mix:'Daily mix', match:'Match a note', interval:'Sing an interval', echo:'Echo a phrase', hl:'Higher or lower', idq:'Name the interval', range:'Find your range'};
+
+/* ---------- drill sheet ---------- */
+const lane = new Lane($('dLane'));
+const tLane = new Lane($('tLane'));
+const D = {
+  token:0, kind:'', cancelSing:null, choiceRes:null, item:null, phase:'',
+  alive(tok){ return tok === this.token; },
+  show(kind){
+    Tuner.stop();
+    this.kind = kind;
+    $('drill').hidden = false; $('dEnd').hidden = true; $('dMain').hidden = false;
+    $('dName').textContent = NAMES[kind]; $('dFb').textContent = ''; $('dFb').className = 'fb';
+    $('dDots').innerHTML = ''; $('dBar').style.width = '0%';
+    keepAwake(true);
+  },
+  header(i, n, tolText){
+    $('dCount').textContent = (i + 1) + ' of ' + n;
+    $('dBar').style.width = (i / n * 100) + '%';
+    $('dTol').textContent = tolText; $('dTol').hidden = !tolText;
+  },
+  setPhase(p){
+    this.phase = p;
+    const c = $('dPhase'); c.dataset.p = p;
+    c.textContent = p === 'listen' ? 'Listen' : p === 'sing' ? 'Your turn' : p === 'answer' ? 'Choose' : 'Result';
+    $('dReplay').disabled = p === 'listen';
+    $('dSkip').disabled = p === 'listen' || p === 'result';
+  },
+  fb(text, cls){ const f = $('dFb'); f.textContent = text; f.className = 'fb' + (cls ? ' ' + cls : ''); },
+  readout(m, e, p){
+    $('rNote').textContent = m == null ? '—' : nn(m);
+    const rc = $('rCents');
+    if (e == null) { rc.innerHTML = '&nbsp;'; rc.style.color = ''; }
+    else { rc.textContent = fmtC(e); const a = Math.abs(e), tol = lane.tol; rc.style.color = a <= tol ? 'var(--good)' : a <= tol * 2.5 ? 'var(--near)' : 'var(--off)'; }
+    $('ringFg').style.strokeDashoffset = (169.65 * (1 - Math.max(0, Math.min(1, p || 0)))).toFixed(1);
+  },
+  async micOrExplain(){
+    try { await Audio.init(true); return true; }
+    catch(e) {
+      $('laneMode').hidden = true; $('choiceMode').hidden = false; $('cBtns').innerHTML = '';
+      $('dTitle').textContent = 'Microphone needed';
+      $('dSub').textContent = e.name === 'Insecure'
+        ? 'Open Pitch Lock from its https:// address (for example GitHub Pages). Browsers only allow the mic on secure pages.'
+        : 'Access was blocked. In Safari, tap aA in the address bar, then Website Settings, then set Microphone to Allow. On the Home Screen app, check Settings › Apps › Safari › Microphone. Then start the drill again.';
+      $('cBig').textContent = ''; this.setPhase('result'); $('dReplay').disabled = true; $('dSkip').disabled = true;
+      return false;
+    }
+  },
+  close(){
+    this.token++;
+    if (this.cancelSing) this.cancelSing('abort');
+    if (this.choiceRes) { const r = this.choiceRes; this.choiceRes = null; r(null); }
+    Engine.stop(); if (Audio.ctx) Audio.stopAll(); Audio.releaseMic(); keepAwake(false);
+    $('drill').hidden = true;
+    renderTrain(); renderProgress();
+  },
+  dots(n){ $('dDots').innerHTML = n > 1 ? Array.from({length:n}, () => '<i class="dot"></i>').join('') : ''; },
+  dot(k, cls){ const d = $('dDots').children[k]; if (d) d.className = 'dot ' + cls; },
+
+  /* --- sung drills --- */
+  async runSung(kind){
+    const tok = ++this.token;
+    this.show(kind);
+    $('laneMode').hidden = false; $('choiceMode').hidden = true;
+    $('dTitle').textContent = 'Getting the mic ready…'; $('dSub').textContent = '';
+    if (!(await this.micOrExplain()) || !this.alive(tok)) return;
+    lane.fit(); lane.tr = []; lane.follow = false;
+    Engine.lane = lane; Engine.handler = m => this.readout(m, null, 0); Engine.start();
+    const plan = kind === 'mix' ? MIX.slice() : Array(10).fill(kind);
+    const res = [], before = {...S.levels};
+    for (let i = 0; i < plan.length; i++) {
+      if (!this.alive(tok)) return;
+      const it = GEN[plan[i]](); this.item = it;
+      const tol = tolFor(it.type);
+      this.header(i, plan.length, '±' + tol + '¢');
+      const r = await this.runItem(it, tol, tok);
+      if (!this.alive(tok)) return;
+      if (!r.skipped) res.push(r);
+      await sleep(r.skipped ? 200 : 900);
+    }
+    if (!this.alive(tok)) return;
+    $('dBar').style.width = '100%';
+    S.sessions.push({t:Date.now(), kind, hits:res.filter(r => r.ok).length, n:res.length}); save();
+    this.endSung(kind, res, before);
+  },
+  async runItem(it, tol, tok){
+    lane.targets = it.targets; lane.active = 0; lane.tol = tol; lane.ghost = it.root != null ? it.root : null;
+    lane.frame(it.targets, lane.ghost);
+    this.dots(it.targets.length);
+    $('dTitle').textContent = it.title; $('dSub').textContent = it.sub; this.fb('');
+    this.readout(null, null, 0);
+    this.setPhase('listen');
+    await this.playRef(it);
+    if (!this.alive(tok)) return {};
+    this.setPhase('sing');
+    const per = [];
+    for (let k = 0; k < it.targets.length; k++) {
+      lane.active = k; this.dot(k, 'on');
+      const r = await this.sing(it.targets[k], tol, it.hold, it.timeout);
+      if (!this.alive(tok)) return {};
+      if (r.skipped) { Engine.handler = m => this.readout(m, null, 0); return {skipped:true}; }
+      per.push(r); this.dot(k, r.ok ? 'hit' : 'miss');
+    }
+    Engine.handler = m => this.readout(m, null, 0);
+    this.setPhase('result');
+    const hits = per.filter(p => p.ok).length, ok = hits === per.length;
+    const errs = per.filter(p => p.err != null).map(p => p.err);
+    const err = errs.length ? mean(errs) : null;
+    const octave = per.some(p => p.octave);
+    const before = it.type === 'interval' ? unlockedIntervals().length : 0;
+    const ch = record(it.type, ok, err);
+    let msg, cls;
+    if (it.type === 'echo') { msg = hits + ' of ' + per.length + ' notes locked' + (err != null ? ' · ' + lean(err) + ' on average' : ''); cls = ok ? 'good' : hits ? 'acc' : 'off'; }
+    else if (ok) { msg = 'Locked · ' + lean(err || 0) + (octave ? ' · in a different octave' : ''); cls = 'good'; }
+    else { msg = err != null ? 'Missed · about ' + lean(err) : 'Missed · no steady pitch heard'; cls = 'off'; }
+    if (ch > 0) {
+      if (it.type === 'interval' && unlockedIntervals().length > before) msg += ' · New interval unlocked: ' + unlockedIntervals()[unlockedIntervals().length - 1].n;
+      else msg += ' · Level up: ±' + tolFor(it.type) + '¢';
+    } else if (ch < 0) msg += ' · Easing off to ±' + tolFor(it.type) + '¢';
+    this.fb(msg, cls);
+    if (!ok) { // model the right answer right after a miss
+      lane.active = 0;
+      await Audio.play(it.type === 'echo' ? it.targets.map(m => [m, .5, .08]) : [[it.targets[0], 1.0]]);
+    } else await sleep(500);
+    return {ok, err, octave, type:it.type};
+  },
+  async playRef(it){
+    const dur = S.refDur;
+    if (it.type === 'match') await Audio.play([[it.targets[0], dur]]);
+    else if (it.type === 'interval') await Audio.play([[it.root, dur]]);
+    else await Audio.play(it.targets.map(m => [m, .55, .08]));
+  },
+  sing(target, tol, hold, timeout){
+    return new Promise(res => {
+      let held = 0, elapsed = 0, voiced = 0, done = false, oct = 0;
+      const errs = [];
+      const finish = (ok, why) => {
+        if (done) return; done = true; this.cancelSing = null; Engine.handler = null;
+        const tail = errs.slice(-40);
+        res({ok, skipped: why === 'skip' || why === 'abort', err: errs.length ? (ok ? mean(tail) : median(errs)) : null, octave: errs.length > 0 && oct > errs.length * .5});
+      };
+      this.cancelSing = why => finish(false, why);
+      Engine.handler = (m, dt, now, muted) => {
+        if (!muted) elapsed += dt;
+        let e = null;
+        if (m != null) {
+          const raw = (m - target) * 100; e = raw;
+          if (!S.strictOctave) { const k = Math.round(raw / 1200); if (k) { e = raw - k * 1200; oct++; } }
+          voiced += dt;
+          if (voiced > 250) errs.push(e);
+          if (Math.abs(e) <= tol) held += dt; else held = Math.max(0, held - dt * 1.5);
+        } else held = Math.max(0, held - dt * .5);
+        this.readout(m, e, held / hold);
+        if (held >= hold) finish(true);
+        else if (elapsed >= timeout) finish(false);
+      };
+    });
+  },
+  endSung(kind, res, before){
+    const n = res.length, hits = res.filter(r => r.ok).length;
+    const okErr = res.filter(r => r.ok && r.err != null).map(r => Math.abs(r.err));
+    const all = res.filter(r => r.err != null).map(r => r.err);
+    const bias = mean(all);
+    const rows = [];
+    rows.push(['Average distance when locked', okErr.length ? Math.round(mean(okErr)) + '¢' : '—']);
+    rows.push(['Lean', all.length < 3 ? '—' : Math.abs(bias) < 5 ? 'none' : Math.round(Math.abs(bias)) + '¢ ' + (bias > 0 ? 'sharp' : 'flat')]);
+    for (const d of ['match', 'interval', 'echo']) {
+      if (!res.some(r => r.type === d)) continue;
+      const nowT = tolFor(d); const prevL = S.levels[d]; S.levels[d] = before[d]; const thenT = tolFor(d); S.levels[d] = prevL;
+      const label = d === 'match' ? 'Match tolerance' : d === 'interval' ? 'Interval tolerance' : 'Phrase tolerance';
+      rows.push([label, thenT === nowT ? '±' + nowT + '¢' : '±' + thenT + '¢ → ±' + nowT + '¢']);
+    }
+    this.end(hits, n, rows, kind);
+  },
+  end(hits, n, rows, kind, headline){
+    Engine.handler = null;
+    $('dMain').hidden = true; const e = $('dEnd'); e.hidden = false;
+    const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    e.innerHTML = '<div><div class="eyebrow" style="margin-left:0">' + esc(NAMES[kind]) + ' · done</div>' +
+      (headline ? '<div class="score">' + headline + '</div>' : '<div class="score">' + hits + '<small> / ' + n + '</small></div>') + '</div>' +
+      '<div class="kv">' + rows.map(r => '<div><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>').join('') + '</div>' +
+      '<div class="endbtns"><button class="btn ghost" data-act="d-close">Done</button><button class="btn" data-act="start" data-kind="' + kind + '">Go again</button></div>';
+    Engine.stop(); Audio.releaseMic(); keepAwake(false);
+  },
+
+  /* --- listen-only drills --- */
+  choices(opts){
+    const b = $('cBtns'); b.innerHTML = '';
+    b.style.gridTemplateColumns = '1fr 1fr';
+    opts.forEach(([label, val]) => {
+      const x = document.createElement('button'); x.className = 'btn'; x.textContent = label; x.dataset.val = val;
+      x.onclick = () => { if (this.choiceRes) { const r = this.choiceRes; this.choiceRes = null; r({val, el:x}); } };
+      b.appendChild(x);
+    });
+    return new Promise(r => { this.choiceRes = r; });
+  },
+  markChoices(rightVal, picked){
+    for (const x of $('cBtns').children) {
+      x.disabled = true;
+      if (x.dataset.val === String(rightVal)) x.classList.add('right');
+      else if (picked && x === picked) x.classList.add('wrong');
+    }
+  },
+  async runHL(){
+    const tok = ++this.token;
+    this.show('hl'); $('laneMode').hidden = true; $('choiceMode').hidden = false;
+    try { await Audio.init(false); } catch(e){}
+    const [lo, hi] = R(); const N = 20;
+    let d = 100, run = 0, dir = null, correct = 0; const revs = [];
+    for (let i = 0; i < N; i++) {
+      if (!this.alive(tok)) return;
+      this.header(i, N, 'gap ' + Math.round(d) + '¢');
+      const base = rand(lo, hi) + (Math.random() - .5), up = Math.random() < .5, second = base + (up ? 1 : -1) * d / 100;
+      this.item = {pair:[base, second]};
+      $('dTitle').textContent = 'Was the second note higher or lower?'; $('dSub').textContent = 'Two notes. Listen to the second one against the first.';
+      $('cBig').textContent = ''; this.fb('');
+      const p = this.choices([['Lower ↓', 'lo'], ['Higher ↑', 'hi']]);
+      for (const x of $('cBtns').children) x.disabled = true;
+      this.setPhase('listen');
+      await Audio.play([[base, .55, .25], [second, .55]]);
+      if (!this.alive(tok)) return;
+      for (const x of $('cBtns').children) x.disabled = false;
+      this.setPhase('answer');
+      const a = await p; if (!a || !this.alive(tok)) return;
+      const right = (a.val === 'hi') === up;
+      this.markChoices(up ? 'hi' : 'lo', a.el);
+      record('hl', right, null);
+      if (right) { correct++; run++; this.fb('Correct', 'good');
+        if (run === 2) { run = 0; if (dir === 'up') revs.push(d); dir = 'down'; d = Math.max(2, d * .7); } }
+      else { this.fb('It went ' + (up ? 'higher' : 'lower') + ' by ' + Math.round(d) + '¢', 'off'); run = 0;
+        if (dir === 'down') revs.push(d); dir = 'up'; d = Math.min(300, d * 1.4); }
+      this.setPhase('result');
+      await sleep(right ? 650 : 1100);
+    }
+    if (!this.alive(tok)) return;
+    const use = revs.slice(-6), thr = use.length >= 2 ? Math.exp(mean(use.map(Math.log))) : d;
+    S.ear.push({t:Date.now(), thr:Math.round(thr)}); save();
+    const best = Math.min(...S.ear.map(x => x.thr));
+    this.end(correct, N, [
+      ['Correct', correct + ' of ' + N],
+      ['Smallest gap you can reliably hear', Math.round(thr) + '¢'],
+      ['Your best so far', best + '¢'],
+      ['For scale', '100¢ = one semitone']
+    ], 'hl', Math.round(thr) + '<small>¢ threshold</small>');
+  },
+  async runIDQ(){
+    const tok = ++this.token;
+    this.show('idq'); $('laneMode').hidden = true; $('choiceMode').hidden = false;
+    try { await Audio.init(false); } catch(e){}
+    const [lo, hi] = R(); const N = 10;
+    const pool = INTERVALS.slice(0, Math.min(INTERVALS.length, 4 + S.levels.idq));
+    let correct = 0;
+    for (let i = 0; i < N; i++) {
+      if (!this.alive(tok)) return;
+      this.header(i, N, pool.length + ' intervals');
+      const iv = pick(pool), dir = S.levels.idq >= 3 && Math.random() < .4 ? -1 : 1;
+      const root = dir > 0 ? rand(lo, Math.max(lo, hi - iv.s)) : rand(Math.min(hi, lo + iv.s), hi);
+      const t = root + dir * iv.s;
+      this.item = {pair:[root, t]};
+      $('dTitle').textContent = 'Name the interval'; $('dSub').textContent = dir > 0 ? 'Going up.' : 'Going down.';
+      $('cBig').textContent = ''; this.fb('');
+      const others = shuffle(pool.filter(x => x !== iv)).slice(0, 3);
+      const opts = shuffle([iv, ...others]).map(x => [x.n, x.s]);
+      const p = this.choices(opts);
+      for (const x of $('cBtns').children) x.disabled = true;
+      this.setPhase('listen');
+      await Audio.play([[root, .7, .12], [t, .7]]);
+      if (!this.alive(tok)) return;
+      for (const x of $('cBtns').children) x.disabled = false;
+      this.setPhase('answer');
+      const a = await p; if (!a || !this.alive(tok)) return;
+      const right = Number(a.val) === iv.s;
+      this.markChoices(iv.s, a.el); record('idq', right, null);
+      if (right) { correct++; this.fb('Correct · ' + iv.n, 'good'); }
+      else { this.fb('That was a ' + iv.n + (dir > 0 ? '. Think ' + iv.cue + '.' : '.'), 'off'); }
+      this.setPhase('result');
+      await sleep(400);
+      if (!right) await Audio.play([[root, .6, .08], [t, .9]]);
+      await sleep(right ? 400 : 700);
+    }
+    if (!this.alive(tok)) return;
+    const prev = S.levels.idq;
+    if (correct >= 8 && S.levels.idq < MAXL.idq) S.levels.idq++;
+    else if (correct <= 4 && S.levels.idq > 0) S.levels.idq--;
+    save();
+    const now = INTERVALS.slice(0, Math.min(INTERVALS.length, 4 + S.levels.idq));
+    this.end(correct, N, [
+      ['Intervals in play', pool.length === now.length ? String(now.length) : pool.length + ' → ' + now.length],
+      [now.length > pool.length ? 'Added' : 'Next to unlock', now.length > pool.length ? now[now.length - 1].n : (INTERVALS[now.length] ? INTERVALS[now.length].n : 'all unlocked')],
+      ['Unlock rule', '8 of 10 to add one']
+    ], 'idq');
+  },
+
+  /* --- range finder --- */
+  async runRange(){
+    const tok = ++this.token;
+    this.show('range'); $('laneMode').hidden = false; $('choiceMode').hidden = true;
+    $('dTol').hidden = true; $('dCount').textContent = 'Two steps';
+    $('dTitle').textContent = 'Getting the mic ready…'; $('dSub').textContent = '';
+    if (!(await this.micOrExplain()) || !this.alive(tok)) return;
+    lane.fit(); lane.tr = []; lane.targets = []; lane.active = -1; lane.ghost = null; lane.follow = true; lane.center = 55; lane.half = 9;
+    Engine.lane = lane; Engine.start();
+    const steps = [['Sing your lowest comfortable note', 'Slide down on “ah” until it starts to feel strained, come back up a little, and hold it.'],
+                   ['Now your highest comfortable note', 'Slide up until it gets thin or tight, come back down a little, and hold it. No falsetto.']];
+    const got = [];
+    for (let i = 0; i < 2; i++) {
+      $('dBar').style.width = (i * 50) + '%';
+      $('dTitle').textContent = steps[i][0]; $('dSub').textContent = steps[i][1]; this.fb('');
+      this.setPhase('sing'); $('dReplay').disabled = true;
+      const m = await this.capture();
+      if (m == null || !this.alive(tok)) return;
+      got.push(m); this.fb((i ? 'Highest: ' : 'Lowest: ') + nn(m), 'good');
+      await sleep(900);
+    }
+    $('dBar').style.width = '100%';
+    let [a, b] = got.map(Math.round); if (a > b) [a, b] = [b, a];
+    if (b - a < 5) {
+      this.end(0, 0, [['Measured', nn(a) + ' – ' + nn(b)], ['Problem', 'Under 5 semitones apart'], ['Try', 'A relaxed “ah”, sliding further each way']], 'range', 'Try again');
+      return;
+    }
+    const tr = b - a >= 9 ? [a + 1, b - 1] : [a, b];
+    S.range = tr; S.voice = 'Measured'; save();
+    this.end(0, 0, [['Comfortable range', nn(a) + ' – ' + nn(b)], ['Drills will use', nn(tr[0]) + ' – ' + nn(tr[1])], ['Span', (tr[1] - tr[0]) + ' semitones']], 'range', '<small>Saved</small>');
+  },
+  capture(){
+    return new Promise(res => {
+      const win = []; let held = 0, done = false;
+      this.cancelSing = () => { if (!done) { done = true; Engine.handler = null; res(null); } };
+      Engine.handler = (m, dt) => {
+        if (m == null) { win.length = 0; held = Math.max(0, held - dt); }
+        else {
+          win.push(m); if (win.length > 36) win.shift();
+          const steady = win.length >= 24 && Math.max(...win) - Math.min(...win) < .8;
+          held = steady ? held + dt : Math.max(0, held - dt);
+        }
+        this.readout(m, null, held / 1300);
+        if (held >= 1300 && !done) { done = true; this.cancelSing = null; Engine.handler = null; res(median(win)); }
+      };
+    });
+  },
+  replay(){
+    if (this.phase === 'listen' || !this.item) return;
+    if (this.kind === 'hl' || this.kind === 'idq') { const [a, b] = this.item.pair; Audio.play([[a, .55, .2], [b, .55]]); return; }
+    if (this.kind === 'range') return;
+    this.playRef(this.item);
+  },
+  skip(){
+    if (this.cancelSing) this.cancelSing('skip');
+    else if (this.choiceRes && this.item && this.phase === 'answer') { /* no skipping quiz answers */ }
+  }
+};
+
+/* ---------- tuner ---------- */
+const Tuner = {
+  on:false, droneOn:false, note:57,
+  async start(){
+    try { await Audio.init(true); }
+    catch(e){ $('tIdle').querySelector('p').textContent = e.name === 'Insecure' ? 'Microphone needs the https:// address of this app.' : 'Microphone access was blocked. Allow it in Safari’s Website Settings, then try again.'; return; }
+    $('tIdle').hidden = true; tLane.fit(); tLane.follow = true; tLane.tr = [];
+    tLane.targets = this.droneOn ? [this.note] : []; tLane.active = this.droneOn ? 0 : -1; tLane.tol = 25;
+    Engine.lane = tLane; Engine.handler = m => this.read(m); Engine.start(); this.on = true; keepAwake(true);
+  },
+  stop(){
+    if (!this.on) return;
+    this.on = false; Engine.stop(); if (Audio.ctx) Audio.stopDrone(); this.droneOn = false; Audio.releaseMic(); keepAwake(false);
+    $('tIdle').hidden = false; this.ui();
+  },
+  read(m){
+    $('tNote').textContent = m == null ? '—' : nn(m);
+    $('tHz').innerHTML = m == null ? '&nbsp;' : hz(m).toFixed(1) + ' Hz';
+    const nd = $('tNeedle');
+    if (m == null) { nd.style.left = '50%'; nd.style.background = 'var(--ink-2)'; return; }
+    let c = this.droneOn ? (m - this.note) * 100 : (m - Math.round(m)) * 100;
+    if (this.droneOn) c -= Math.round(c / 1200) * 1200;
+    const cl = Math.max(-50, Math.min(50, c));
+    nd.style.left = (50 + cl) + '%';
+    const a = Math.abs(c); nd.style.background = a <= 10 ? 'var(--good)' : a <= 25 ? 'var(--near)' : 'var(--off)';
+  },
+  async toggleDrone(){
+    if (!this.on) await this.start();
+    if (!this.on) return;
+    this.droneOn = !this.droneOn;
+    if (this.droneOn) Audio.drone(this.note); else Audio.stopDrone();
+    tLane.targets = this.droneOn ? [this.note] : []; tLane.active = this.droneOn ? 0 : -1;
+    if (this.droneOn) tLane.center = this.note;
+    this.ui();
+  },
+  step(k){
+    this.note = Math.max(36, Math.min(84, this.note + k));
+    if (this.droneOn) { Audio.setDrone(this.note); tLane.targets = [this.note]; tLane.center = this.note; }
+    this.ui();
+  },
+  ui(){
+    $('droneNote').textContent = nn(this.note);
+    $('droneBtn').textContent = this.droneOn ? 'Stop' : 'Play';
+    $('droneWarn').hidden = !(this.droneOn && !S.headphones);
+  }
+};
+
+/* ---------- views ---------- */
+const chev = '<svg class="chev" viewBox="0 0 8 14"><path d="M1 1l6 6-6 6"/></svg>';
+function renderTrain(){
+  const today = S.days[dayKey()] || {n:0, h:0};
+  const wk = (() => { let n = 0, h = 0; for (let i = 0; i < 7; i++) { const d = new Date(); d.setDate(d.getDate() - i); const x = S.days[dayKey(d)]; if (x) { n += x.n; h += x.h; } } return n ? Math.round(h / n * 100) + '%' : '—'; })();
+  const date = new Date().toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'});
+  const has = !!S.range;
+  const iv = unlockedIntervals();
+  const echoLen = Math.min(6, 3 + Math.floor(S.levels.echo / 2));
+  const idqN = Math.min(INTERVALS.length, 4 + S.levels.idq);
+  const lastEar = S.ear.length ? S.ear[S.ear.length - 1].thr + '¢' : 'new';
+  const voiceGrid = VOICES.map((v, i) => '<button class="vbtn" data-act="voice" data-i="' + i + '" aria-pressed="' + (S.voice === v[0]) + '"><b>' + v[0] + '</b><span>' + nn(v[1]) + '–' + nn(v[2]) + '</span></button>').join('');
+  $('trainBody').innerHTML =
+    '<div class="top"><h1 class="brand"><svg viewBox="0 0 34 24" aria-hidden="true"><rect x="1" y="9" width="32" height="7" rx="3.5" style="fill:var(--accent-soft)"/><path d="M2 4c5 0 6 15 11 10s6-1.5 19-1.5" style="fill:none;stroke:var(--accent);stroke-width:2.6;stroke-linecap:round"/></svg>Pitch Lock</h1><span class="date">' + date + '</span></div>' +
+    (has ? '' :
+      '<div class="card" id="rangeCard"><h3>Set your voice range first</h3><p>Every drill picks notes inside this range, so you never strain for targets you can’t reach. Pick the closest voice type or measure it.</p><div class="voices">' + voiceGrid + '</div><button class="btn ghost" data-act="start" data-kind="range">Measure my range</button></div>') +
+    '<section class="hero">' +
+      '<svg class="trace" viewBox="0 0 240 84" aria-hidden="true"><rect x="96" y="36" width="144" height="12" rx="6" fill="currentColor" opacity=".16"/><path d="M4 14c18 0 20 56 40 52s18-40 34-36 14 12 30 12 20 0 128 0" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity=".6"/></svg>' +
+      '<span class="k">Daily mix</span><h2>12 reps<br>about 5 min</h2><p>Single notes, intervals, and short phrases at your current level.</p>' +
+      '<button class="go" data-act="start" data-kind="mix"' + (has ? '' : ' disabled style="opacity:.5"') + '>Start</button>' +
+    '</section>' +
+    '<div class="statline"><span><b>' + streak() + '</b>-day streak</span><span><b>' + today.n + '</b> reps today</span><span><b>' + wk + '</b> hit rate, 7 days</span></div>' +
+    (has ? '<div class="rangeline"><div><div class="eyebrow" style="margin:0 0 2px">Training range</div><span class="v">' + nn(S.range[0]) + ' – ' + nn(S.range[1]) + '</span></div><button class="linkbtn" data-act="tab" data-tab="settings">Change</button></div>' : '') +
+    '<div><p class="eyebrow">Sing · uses the mic</p><div class="list">' +
+      row('match', 'Match a note', 'Hear it, sing it, hold it in the band.', '±' + tolFor('match') + '¢', !has) +
+      row('interval', 'Sing an interval', 'Hear a starting note, sing the interval from it.', iv.length + ' of 12', !has) +
+      row('echo', 'Echo a phrase', 'A short melody, sung back note by note.', echoLen + ' notes', !has) +
+    '</div></div>' +
+    '<div><p class="eyebrow">Listen only · for quiet places</p><div class="list">' +
+      row('hl', 'Higher or lower', 'Find the smallest pitch gap you can hear.', lastEar, false) +
+      row('idq', 'Name the interval', 'Hear two notes, name the distance.', idqN + ' of 12', false) +
+    '</div></div>';
+}
+function row(kind, t, d, chip, dis){
+  return '<button class="row" data-act="start" data-kind="' + kind + '"' + (dis ? ' disabled' : '') + '><div><div class="t">' + t + '</div><div class="d">' + d + '</div></div><span class="chip mono">' + chip + '</span>' + chev + '</button>';
+}
+
+function renderProgress(){
+  const days = []; for (let i = 13; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); days.push({d, x:S.days[dayKey(d)] || {n:0, h:0, es:0, en:0}}); }
+  const sung = S.attempts.filter(a => a.e != null).slice(-60);
+  const bias = mean(sung.map(a => a.e));
+  const ladder = l => '<div class="ladder">' + TOLS.map((t, i) => '<i class="' + (i <= l ? 'f' : '') + '"></i>').join('') + '</div><div class="ladder-l"><span>±50¢</span><span>±10¢</span></div>';
+  const lastEar = S.ear.length ? S.ear[S.ear.length - 1].thr : null, bestEar = S.ear.length ? Math.min(...S.ear.map(x => x.thr)) : null;
+  const total = S.attempts.length;
+  $('progBody').innerHTML =
+    '<div class="top"><h1 class="h-page">Progress</h1><span class="date mono">' + total + ' reps logged</span></div>' +
+    '<div class="card"><div class="prog-row"><span class="t">Match tolerance</span><span class="v">±' + tolFor('match') + '¢</span></div>' + ladder(S.levels.match) +
+      '<p>The band tightens after 4 hits in 5 tries and loosens after 3 misses. A tighter band is the real measure of progress; your hit rate will hover near 70% by design.</p></div>' +
+    '<div class="card"><div class="prog-row"><span class="t">Intervals unlocked</span><span class="v">' + unlockedIntervals().length + ' / 12</span></div>' +
+      '<div class="prog-row"><span class="t">Interval tolerance</span><span class="v">±' + tolFor('interval') + '¢</span></div>' +
+      '<div class="prog-row"><span class="t">Phrase length</span><span class="v">' + Math.min(6, 3 + Math.floor(S.levels.echo / 2)) + ' notes · ±' + tolFor('echo') + '¢</span></div>' +
+      '<div class="prog-row"><span class="t">Ear threshold</span><span class="v">' + (lastEar == null ? '—' : lastEar + '¢ (best ' + bestEar + '¢)') + '</span></div></div>' +
+    '<div class="card chart"><div class="prog-row"><span class="t">Distance from target</span><span class="v">avg ¢ per day</span></div>' + errChart(days) + '</div>' +
+    '<div class="card chart"><div class="prog-row"><span class="t">Reps per day</span><span class="v">14 days</span></div>' + repChart(days) + '</div>' +
+    '<div class="card"><div class="prog-row"><span class="t">Your lean</span><span class="v">' + (sung.length < 8 ? 'need more reps' : Math.abs(bias) < 5 ? 'centered' : Math.round(Math.abs(bias)) + '¢ ' + (bias > 0 ? 'sharp' : 'flat')) + '</span></div>' +
+      '<p>' + (sung.length < 8 ? 'After a few sessions this shows whether you tend to land flat or sharp.' : Math.abs(bias) < 5 ? 'No consistent drift across your last ' + sung.length + ' sung reps.' : bias < 0 ? 'Across your last ' + sung.length + ' sung reps you land low. Aim for the top edge of the band and support the note with breath; flat singing is usually under-supported, not a hearing problem.' : 'Across your last ' + sung.length + ' sung reps you land high. Relax the jaw and throat and aim for the bottom edge of the band; sharp singing usually comes from pushing.') + '</p></div>';
+}
+function errChart(days){
+  const W = 330, H = 130, L = 26, B = 18, T = 8;
+  const pts = days.map((p, i) => ({i, v: p.x.en ? p.x.es / p.x.en : null}));
+  const vals = pts.filter(p => p.v != null).map(p => p.v);
+  if (!vals.length) return '<p class="empty">Sing a few drills and your daily average shows up here. Lower is better.</p>';
+  const max = Math.max(50, Math.ceil(Math.max(...vals) / 25) * 25);
+  const X = i => L + (W - L - 6) * i / 13, Y = v => T + (H - T - B) * (1 - v / max);
+  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Average cents from target per day">';
+  for (const g of [0, max / 2, max]) s += '<line x1="' + L + '" x2="' + W + '" y1="' + Y(g) + '" y2="' + Y(g) + '" stroke="var(--line)" stroke-width="1"/><text x="' + (L - 4) + '" y="' + (Y(g) + 3) + '" text-anchor="end">' + Math.round(g) + '</text>';
+  let path = '', pen = false;
+  for (const p of pts) { if (p.v == null) { pen = false; continue; } path += (pen ? 'L' : 'M') + X(p.i).toFixed(1) + ' ' + Y(p.v).toFixed(1); pen = true; }
+  s += '<path d="' + path + '" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  pts.forEach(p => { if (p.v != null) s += '<circle cx="' + X(p.i) + '" cy="' + Y(p.v) + '" r="' + (p.i === 13 ? 4.5 : 3) + '" fill="var(--accent)"/>'; });
+  days.forEach((p, i) => { if (i % 2 === 1 || i === 13) s += '<text x="' + X(i) + '" y="' + (H - 4) + '" text-anchor="middle">' + p.d.getDate() + '</text>'; });
+  return s + '</svg>';
+}
+function repChart(days){
+  const W = 330, H = 110, L = 26, B = 18, T = 8;
+  const max = Math.max(10, ...days.map(p => p.x.n));
+  if (!days.some(p => p.x.n)) return '<p class="empty">Nothing logged yet.</p>';
+  const bw = (W - L - 6) / 14, Y = v => T + (H - T - B) * (1 - v / max);
+  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Reps per day">';
+  s += '<line x1="' + L + '" x2="' + W + '" y1="' + Y(0) + '" y2="' + Y(0) + '" stroke="var(--line)"/><text x="' + (L - 4) + '" y="' + (Y(max) + 3) + '" text-anchor="end">' + max + '</text>';
+  days.forEach((p, i) => {
+    const x = L + i * bw + 2, h = Y(0) - Y(p.x.n);
+    if (p.x.n) s += '<rect x="' + x.toFixed(1) + '" y="' + Y(p.x.n).toFixed(1) + '" width="' + (bw - 4).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + (i === 13 ? 'var(--accent)' : 'var(--ink-2)') + '" opacity="' + (i === 13 ? 1 : .55) + '"/>';
+    if (i % 2 === 1 || i === 13) s += '<text x="' + (x + bw / 2 - 2).toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">' + p.d.getDate() + '</text>';
+  });
+  return s + '</svg>';
+}
+
+let resetArmed = 0;
+function renderSettings(){
+  const voiceGrid = VOICES.map((v, i) => '<button class="vbtn" data-act="voice" data-i="' + i + '" aria-pressed="' + (S.voice === v[0]) + '"><b>' + v[0] + '</b><span>' + nn(v[1]) + '–' + nn(v[2]) + '</span></button>').join('');
+  const sw = (key, t, d) => '<div class="set"><div><div class="t">' + t + '</div><div class="d">' + d + '</div></div><button class="switch" role="switch" aria-label="' + t + '" aria-checked="' + !!S[key] + '" data-act="toggle" data-key="' + key + '"></button></div>';
+  const segv = [0.8, 1.2, 2.0];
+  $('setBody').innerHTML =
+    '<div class="top"><h1 class="h-page">Settings</h1></div>' +
+    '<div class="card"><div class="prog-row"><span class="t">Voice range</span><span class="v">' + (S.range ? nn(S.range[0]) + ' – ' + nn(S.range[1]) : 'not set') + '</span></div>' +
+      '<div class="voices">' + voiceGrid + '</div>' +
+      '<button class="btn ghost" data-act="start" data-kind="range">' + (S.voice === 'Measured' ? 'Measure again' : 'Measure my range') + '</button></div>' +
+    '<div><p class="eyebrow">Practice</p><div class="list">' +
+      sw('strictOctave', 'Strict octave', 'Off: the right note sung an octave away still counts, and the app tells you. On: it has to be the exact octave.') +
+      sw('headphones', 'Headphones mode', 'Keeps listening while tones play, so you can sing along with the drone. Only with headphones.') +
+      '<div class="set"><div><div class="t">Reference tone</div><div class="d">How long single target notes play.</div></div><div class="seg">' +
+        segv.map(v => '<button data-act="refdur" data-v="' + v + '" aria-pressed="' + (S.refDur === v) + '">' + v.toFixed(1) + 's</button>').join('') + '</div></div>' +
+    '</div></div>' +
+    '<div><p class="eyebrow">iPhone tips</p><ol class="tips">' +
+      '<li>Wired earbuds or AirPods give the cleanest result. On the speaker, iOS may lower playback volume while the mic is on.</li>' +
+      '<li>If you hear nothing, flip the Ring/Silent switch to Ring or raise the volume.</li>' +
+      '<li>Hold the phone 20–40 cm from your mouth and sing on an open vowel like “ah” or “oo”.</li>' +
+      '<li>Add to Home Screen from Safari’s Share menu so it opens full screen, like an app.</li>' +
+    '</ol></div>' +
+    '<div class="list"><div class="set"><div><div class="t">Reset progress</div><div class="d">Erases levels, history, and your range on this phone.</div></div><button class="btn small ghost danger" data-act="reset">' + (resetArmed ? 'Tap to confirm' : 'Reset') + '</button></div></div>' +
+    '<p class="note">Everything stays on this device. Nothing is recorded or uploaded.</p>';
+}
+
+/* ---------- navigation & actions ---------- */
+let tab = 'train';
+function go(t){
+  if (t !== 'tuner') Tuner.stop();
+  tab = t;
+  for (const v of ['train', 'tuner', 'progress', 'settings']) $('v-' + v).hidden = v !== t;
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  if (t === 'train') renderTrain(); else if (t === 'progress') renderProgress(); else if (t === 'settings') renderSettings();
+  else { Tuner.ui(); tLane.fit(); tLane.draw(performance.now()); }
+}
+const ACTS = {
+  tab: b => go(b.dataset.tab),
+  start: b => {
+    const k = b.dataset.kind;
+    if (k === 'hl') return D.runHL();
+    if (k === 'idq') return D.runIDQ();
+    if (k === 'range') return D.runRange();
+    if (!S.range) { go('train'); const c = $('rangeCard'); if (c) { c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); } return; }
+    D.runSung(k);
+  },
+  voice: b => { const v = VOICES[+b.dataset.i]; S.range = [v[1], v[2]]; S.voice = v[0]; Tuner.note = Math.round((v[1] + v[2]) / 2); save(); if (tab === 'settings') renderSettings(); else renderTrain(); },
+  toggle: b => { const k = b.dataset.key; S[k] = !S[k]; save(); renderSettings(); },
+  refdur: b => { S.refDur = +b.dataset.v; save(); renderSettings(); },
+  reset: () => {
+    if (!resetArmed) { resetArmed = setTimeout(() => { resetArmed = 0; if (tab === 'settings') renderSettings(); }, 3000); renderSettings(); return; }
+    clearTimeout(resetArmed); resetArmed = 0;
+    try { localStorage.removeItem(KEY); } catch(e){}
+    Object.assign(S, load()); renderSettings();
+  },
+  'd-close': () => D.close(),
+  'd-replay': () => D.replay(),
+  'd-skip': () => D.skip(),
+  'tuner-start': () => Tuner.start(),
+  'drone-toggle': () => Tuner.toggleDrone(),
+  'drone-up': () => Tuner.step(1),
+  'drone-down': () => Tuner.step(-1)
+};
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
+  const f = ACTS[b.dataset.act]; if (f) f(b);
+});
+window.addEventListener('resize', () => { lane.w = 0; tLane.w = 0; });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { Tuner.stop(); }
+  else if (Audio.ctx && Audio.ctx.state !== 'running' && !$('drill').hidden) Audio.ctx.resume().catch(() => {});
+});
+
+if (S.range) Tuner.note = Math.round((S.range[0] + S.range[1]) / 2);
+go('train');
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
