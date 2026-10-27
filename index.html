@@ -381,31 +381,62 @@ const unlockedIntervals = () => INTERVALS.slice(0, Math.min(INTERVALS.length, 3 
 
 /* ---------- audio ---------- */
 const Audio = {
-  ctx:null, master:null, stream:null, analyser:null, buf:null, busyUntil:0, live:[], _w:null, _drone:null,
-  async init(needMic){
-    if (needMic) { try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch(e){} }
-    if (!this.ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      this.ctx = new AC({latencyHint:'interactive'});
-      const comp = this.ctx.createDynamicsCompressor();
-      this.master = this.ctx.createGain(); this.master.gain.value = 0.95;
-      this.master.connect(comp); comp.connect(this.ctx.destination);
+  ctx:null, master:null, stream:null, analyser:null, buf:null, busyWall:0, live:[], _w:null, _drone:null, relTimer:null,
+  // iOS can freeze an AudioContext ("interrupted") and resume() may never settle, so every wait here is bounded.
+  async ensure(){
+    const c = this.ctx; if (!c) return false;
+    if (c.state === 'running') return true;
+    try { await Promise.race([c.resume(), sleep(700)]); } catch(e){}
+    return c.state === 'running';
+  },
+  newContext(){
+    this.stopAll();
+    if (this.ctx) { try { this.ctx.close(); } catch(e){} }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AC({latencyHint:'interactive'});
+    this._w = null; this.busyWall = 0;
+    const comp = this.ctx.createDynamicsCompressor();
+    this.master = this.ctx.createGain(); this.master.gain.value = 0.95;
+    this.master.connect(comp); comp.connect(this.ctx.destination);
+    this.analyser = null;
+    if (this.stream) {
+      const src = this.ctx.createMediaStreamSource(this.stream);
+      this.analyser = this.ctx.createAnalyser(); this.analyser.fftSize = 2048;
+      src.connect(this.analyser); this.buf = new Float32Array(this.analyser.fftSize);
     }
-    if (this.ctx.state !== 'running') await this.ctx.resume();
+    this.ctx.onstatechange = () => { if (this.ctx && this.ctx.state !== 'running' && this.ctx.state !== 'closed') this.ensure(); };
+  },
+  // Call synchronously inside a tap: a context created or resumed in a user gesture is allowed to play on iOS.
+  unlockInGesture(){
+    try {
+      // On iOS a stuck context often ignores resume(); a context built inside the tap starts running.
+      if (!this.ctx || this.ctx.state !== 'running') this.newContext();
+      const b = this.ctx.createBuffer(1, 1, 22050), src = this.ctx.createBufferSource();
+      src.buffer = b; src.connect(this.ctx.destination); src.start(0);
+    } catch(e){}
+  },
+  async init(needMic){
+    clearTimeout(this.relTimer); this.relTimer = null;
     if (needMic && !this.stream) {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { const e = new Error('insecure'); e.name = 'Insecure'; throw e; }
+      try { if (navigator.audioSession) navigator.audioSession.type = 'auto'; } catch(e){}
       this.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
-      const src = this.ctx.createMediaStreamSource(this.stream);
-      this.analyser = this.ctx.createAnalyser();
-      this.analyser.fftSize = 2048;
-      src.connect(this.analyser);
-      this.buf = new Float32Array(this.analyser.fftSize);
-      if (this.ctx.state !== 'running') await this.ctx.resume();
+      this.newContext(); // build after capture starts so the context matches the capture session's route and rate
+    } else if (!this.ctx || this.ctx.state === 'closed') {
+      if (!this.stream) { try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch(e){} }
+      this.newContext();
     }
+    if (!(await this.ensure()) && this.ctx.state !== 'running') { this.newContext(); await this.ensure(); }
+  },
+  releaseSoon(){ // keep the mic between back-to-back sessions; re-grabbing it is what upsets iOS audio
+    clearTimeout(this.relTimer);
+    this.relTimer = setTimeout(() => { if ($('drill').hidden && !Tuner.on) this.releaseMic(); }, 45000);
   },
   releaseMic(){
+    clearTimeout(this.relTimer); this.relTimer = null;
     if (this.stream) this.stream.getTracks().forEach(t => t.stop());
     this.stream = null; this.analyser = null;
+    if (this.ctx) { try { this.ctx.close(); } catch(e){} this.ctx = null; } // next session starts on a clean context
   },
   wave(){
     if (!this._w) {
@@ -428,18 +459,26 @@ const Audio = {
     o.connect(g); g.connect(this.master);
     o.start(t0); o.stop(t0 + dur + .05);
     this.live.push(o); o.onended = () => { this.live = this.live.filter(x => x !== o); };
-    this.busyUntil = Math.max(this.busyUntil, t0 + dur);
+    this.busyWall = Math.max(this.busyWall, performance.now() + (t0 + dur - c.currentTime) * 1000);
     return t0 + dur;
   },
-  async play(seq){ // seq: [[midi, dur, gapAfter], ...]
-    let at = 0, end = 0;
-    for (const [m, d, gap = 0] of seq) { end = this.tone(m, d, at); at += d + gap; }
-    await sleep(Math.max(0, (end - this.ctx.currentTime) * 1000) + 140);
+  // Plays a sequence and verifies the audio clock actually advanced. Returns false if the user backed out.
+  async play(seq, retried){ // seq: [[midi, dur, gapAfter], ...]
+    if (!(await this.ensure())) { if (!(await D.needSound())) return false; }
+    const c0 = this.ctx.currentTime; let at = 0;
+    for (const [m, d, gap = 0] of seq) { this.tone(m, d, at); at += d + gap; }
+    await sleep(at * 1000 + 180);
+    if (this.ctx.currentTime - c0 < at * 0.5) { // clock froze: iOS paused this context
+      this.stopAll();
+      if (retried || !(await D.needSound())) return false;
+      return this.play(seq, true);
+    }
+    return true;
   },
-  isPlaying(){ return !!this.ctx && this.ctx.currentTime < this.busyUntil + 0.12; },
+  isPlaying(){ return performance.now() < this.busyWall + 120; },
   stopAll(){
     for (const o of this.live) { try { o.stop(); } catch(e){} }
-    this.live = []; this.busyUntil = 0; this.stopDrone();
+    this.live = []; this.busyWall = 0; this.stopDrone();
   },
   drone(m, gain = .2){
     this.stopDrone();
@@ -452,9 +491,11 @@ const Audio = {
   setDrone(m){ if (this._drone) this._drone.o.frequency.setTargetAtTime(hz(m), this.ctx.currentTime, .03); },
   stopDrone(){
     const d = this._drone; if (!d) return;
+    this._drone = null;
+    if (!this.ctx || this.ctx.state === 'closed') return;
     const t = this.ctx.currentTime;
     d.g.gain.cancelScheduledValues(t); d.g.gain.setValueAtTime(d.g.gain.value, t); d.g.gain.linearRampToValueAtTime(0, t + .1);
-    d.o.stop(t + .12); this._drone = null;
+    try { d.o.stop(t + .12); } catch(e){}
   }
 };
 
@@ -716,6 +757,21 @@ const D = {
     if (text != null) { const d = $('cDir'); d.textContent = text; d.className = 'dir' + (cls ? ' ' + cls : ''); }
   },
   coachDir(text, cls){ const d = $('cDir'); if (d.textContent !== text) d.textContent = text; d.className = 'dir' + (cls ? ' ' + cls : ''); },
+  // Shown when iOS has paused audio: the tap itself (handled in ACTS['d-go']) restarts the audio engine.
+  async needSound(){
+    if ($('drill').hidden) return false;
+    const prevFb = [$('dFb').textContent, $('dFb').className];
+    this.fb('Your phone paused the app’s sound. Tap the button to turn it back on.', 'acc');
+    if (!$('dCoach').hidden) this.coachDir('Sound paused', 'off');
+    this.soundWait = true;
+    const ok = await this.waitGo('Turn sound back on');
+    this.soundWait = false;
+    $('dFb').textContent = prevFb[0]; $('dFb').className = prevFb[1];
+    if (!ok) return false;
+    await Audio.ensure(); await sleep(150);
+    return Audio.ctx && Audio.ctx.state === 'running';
+  },
+  safe(p){ return Promise.resolve(p).catch(e => { console.error(e); if (!$('drill').hidden) { this.fb('Something went wrong (' + (e && e.message || e) + '). Close this and start again.', 'off'); } }); },
   waitGo(label){
     $('dReplay').hidden = true; $('dSkip').hidden = true;
     const g = $('dGo'); g.textContent = label; g.hidden = false;
@@ -758,7 +814,7 @@ const D = {
     if (this.cancelSing) this.cancelSing('abort');
     if (this.choiceRes) { const r = this.choiceRes; this.choiceRes = null; r(null); }
     if (this.goRes) this.goRes(null);
-    Engine.stop(); if (Audio.ctx) Audio.stopAll(); Audio.releaseMic(); keepAwake(false);
+    Engine.stop(); if (Audio.ctx) Audio.stopAll(); Audio.releaseSoon(); keepAwake(false);
     $('drill').hidden = true;
     renderTrain(); renderProgress();
   },
@@ -802,8 +858,9 @@ const D = {
     this.coach(snd, 'Listen first…', 'mute');
     this.readout(null, null, 0);
     this.setPhase('listen');
-    await this.playRef(it);
+    const heard = await this.playRef(it);
     if (!this.alive(tok)) return {};
+    if (heard === false) return {skipped:true};
     this.setPhase('sing');
     const per = [];
     for (let k = 0; k < it.targets.length; k++) {
@@ -819,6 +876,11 @@ const D = {
       const r = await this.sing(it.targets[k], tol, it.hold, it.timeout, snd);
       if (guide) Audio.stopDrone();
       if (!this.alive(tok)) return {};
+      if (r.stall) { // audio froze mid-attempt: get sound back, then redo this item from the top
+        Engine.handler = m => this.readout(m, null, 0);
+        if (!(await this.needSound()) || !this.alive(tok)) return {skipped:true};
+        return this.runItem(it, tol, tok);
+      }
       if (r.skipped) { Engine.handler = m => this.readout(m, null, 0); return {skipped:true}; }
       per.push(r); this.dot(k, r.ok ? 'hit' : 'miss');
     }
@@ -857,22 +919,24 @@ const D = {
   },
   async playRef(it){
     const dur = S.refDur;
-    if (it.type === 'match') await Audio.play([[it.targets[0], dur]]);
-    else if (it.type === 'interval') await Audio.play(it.demo ? [[it.root, dur, .35], [it.targets[0], dur]] : [[it.root, dur]]);
-    else await Audio.play(it.targets.map(m => [m, .55, .08]));
+    if (it.type === 'match') return Audio.play([[it.targets[0], dur]]);
+    if (it.type === 'interval') return Audio.play(it.demo ? [[it.root, dur, .35], [it.targets[0], dur]] : [[it.root, dur]]);
+    return Audio.play(it.targets.map(m => [m, .55, .08]));
   },
   sing(target, tol, hold, timeout, snd){
     return new Promise(res => {
-      let held = 0, elapsed = 0, voiced = 0, done = false, oct = 0, silent = 0, lastC = 0;
+      let held = 0, elapsed = 0, voiced = 0, done = false, oct = 0, silent = 0, lastC = 0, frozen = 0;
       const errs = [], recent = [];
       this.coach(snd, 'Your turn: sing now', 'acc');
       const finish = (ok, why) => {
         if (done) return; done = true; this.cancelSing = null; Engine.handler = null;
         const tail = errs.slice(-25);
-        res({ok, skipped: why === 'skip' || why === 'abort', err: errs.length ? (ok ? mean(tail) : median(errs)) : null, octave: errs.length > 0 && oct > errs.length * .5});
+        res({ok, stall: why === 'stall', skipped: why === 'skip' || why === 'abort', err: errs.length ? (ok ? mean(tail) : median(errs)) : null, octave: errs.length > 0 && oct > errs.length * .5});
       };
       this.cancelSing = why => finish(false, why);
       Engine.handler = (m, dt, now, muted) => {
+        frozen = Audio.ctx && Audio.ctx.state === 'running' ? 0 : frozen + dt;
+        if (frozen > 1200) return finish(false, 'stall');
         if (!muted) elapsed += dt;
         let e = null;
         if (m != null) {
@@ -928,7 +992,7 @@ const D = {
       (headline ? '<div class="score">' + headline + '</div>' : '<div class="score">' + hits + '<small> / ' + n + '</small></div>') + '</div>' +
       (rows.length ? '<div class="kv">' + rows.map(r => '<div><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>').join('') + '</div>' : '') +
       (btns || '<div class="endbtns"><button class="btn ghost" data-act="d-close">Done</button><button class="btn" data-act="start" data-kind="' + kind + '">Go again</button></div>');
-    Engine.stop(); Audio.releaseMic(); keepAwake(false);
+    Engine.stop(); Audio.releaseSoon(); keepAwake(false);
   },
 
 
@@ -938,8 +1002,10 @@ const D = {
       let done = false;
       const fin = v => { if (done) return; done = true; this.cancelSing = null; Engine.handler = m => this.readout(m, null, 0); res(v); };
       this.cancelSing = why => fin(why === 'abort' ? null : 'skipped');
-      let lastC = 0;
+      let lastC = 0, frozen = 0, asking = false;
       Engine.handler = (m, dt, now, muted) => {
+        frozen = Audio.ctx && Audio.ctx.state === 'running' ? 0 : frozen + dt;
+        if (frozen > 1200 && !asking) { asking = true; this.needSound().then(() => { asking = false; frozen = 0; }); }
         const r = step(m, dt, muted);
         this.readout(m, null, r.p);
         if (r.say && now - lastC > 200) { lastC = now; this.coachDir(r.say, r.cls); }
@@ -1102,8 +1168,7 @@ const D = {
       const p = this.choices([['Lower ↓', 'lo'], ['Higher ↑', 'hi']]);
       for (const x of $('cBtns').children) x.disabled = true;
       this.setPhase('listen');
-      await Audio.play([[base, .55, .25], [second, .55]]);
-      if (!this.alive(tok)) return;
+      if (!(await Audio.play([[base, .55, .25], [second, .55]])) || !this.alive(tok)) return;
       for (const x of $('cBtns').children) x.disabled = false;
       this.setPhase('answer');
       const a = await p; if (!a || !this.alive(tok)) return;
@@ -1149,8 +1214,7 @@ const D = {
       const p = this.choices(opts);
       for (const x of $('cBtns').children) x.disabled = true;
       this.setPhase('listen');
-      await Audio.play([[root, .7, .12], [t, .7]]);
-      if (!this.alive(tok)) return;
+      if (!(await Audio.play([[root, .7, .12], [t, .7]])) || !this.alive(tok)) return;
       for (const x of $('cBtns').children) x.disabled = false;
       this.setPhase('answer');
       const a = await p; if (!a || !this.alive(tok)) return;
@@ -1251,7 +1315,7 @@ const Tuner = {
   },
   stop(){
     if (!this.on) return;
-    this.on = false; Engine.stop(); if (Audio.ctx) Audio.stopDrone(); this.droneOn = false; Audio.releaseMic(); keepAwake(false);
+    this.on = false; Engine.stop(); if (Audio.ctx) Audio.stopDrone(); this.droneOn = false; Audio.releaseSoon(); keepAwake(false);
     $('tIdle').hidden = false; this.ui();
   },
   read(m){
@@ -1269,7 +1333,7 @@ const Tuner = {
     if (!this.on) await this.start();
     if (!this.on) return;
     this.droneOn = !this.droneOn;
-    if (this.droneOn) Audio.drone(this.note); else Audio.stopDrone();
+    if (this.droneOn) { Audio.unlockInGesture(); Audio.drone(this.note); } else Audio.stopDrone();
     tLane.targets = this.droneOn ? [this.note] : []; tLane.active = this.droneOn ? 0 : -1;
     if (this.droneOn) tLane.center = this.note;
     this.ui();
@@ -1411,6 +1475,7 @@ function renderSettings(){
       '<li><i style="background:var(--off)"></i><span><b>Red</b>: far off. Slide up or down until it changes color.</span></li>' +
       '<li><i style="background:var(--surface-2)"></i><span><b>Note names</b> like A3: letter is the note, number is the octave; bigger is higher. <b>¢</b> (cents): 100¢ is one semitone, one piano key.</span></li>' +
     '</ul></div>' +
+    '<div class="list"><div class="set"><div><div class="t">Sound check</div><div class="d" id="sndStat">Plays a short tone and reports whether audio is running.</div></div><button class="btn small ghost" data-act="sound-test">Play test tone</button></div></div>' +
     '<div><p class="eyebrow">Lessons</p><div class="list">' + LESSONS.map((l, i) => '<button class="row" data-act="lesson" data-id="' + l.id + '"><div><div class="t">' + (i + 1) + '. ' + l.name + '</div><div class="d">' + (lessonDone(l.id) ? 'Done · tap to redo' : 'Not done yet') + '</div></div><span class="chip mono">' + l.time + '</span>' + chev + '</button>').join('') + '</div></div>' +
     '<div><p class="eyebrow">iPhone tips</p><ol class="tips">' +
       '<li>Wired earbuds or AirPods give the cleanest result. On the speaker, iOS may lower playback volume while the mic is on.</li>' +
@@ -1420,6 +1485,22 @@ function renderSettings(){
     '</ol></div>' +
     '<div class="list"><div class="set"><div><div class="t">Reset progress</div><div class="d">Erases levels, history, and your range on this phone.</div></div><button class="btn small ghost danger" data-act="reset">' + (resetArmed ? 'Tap to confirm' : 'Reset') + '</button></div></div>' +
     '<p class="note">Everything stays on this device. Nothing is recorded or uploaded.</p>';
+}
+
+async function soundTest(b){
+  const st = $('sndStat');
+  try {
+    Audio.unlockInGesture();
+    if (!Audio.ctx) await Audio.init(false);
+    const t0 = Audio.ctx.currentTime;
+    Audio.tone(69, .9);
+    st.textContent = 'Playing A4…';
+    await sleep(1000);
+    const moved = Audio.ctx.currentTime - t0 > .5;
+    st.textContent = moved
+      ? 'Audio is running (' + Math.round(Audio.ctx.sampleRate / 100) / 10 + ' kHz). If you heard nothing, raise the volume, flip the Ring/Silent switch to Ring, or try headphones.'
+      : 'iOS has audio paused (state: ' + Audio.ctx.state + '). Tap the button again; if it stays paused, close the app fully and reopen it.';
+  } catch(e){ st.textContent = 'Couldn’t start audio: ' + (e && e.message || e); }
 }
 
 /* ---------- navigation & actions ---------- */
@@ -1437,18 +1518,19 @@ const ACTS = {
   start: b => {
     const k = b.dataset.kind;
     if (!$('drill').hidden) D.close();
-    if (k === 'hl') return D.runHL();
-    if (k === 'idq') return D.runIDQ();
-    if (k === 'range') return D.runRange();
+    if (k === 'hl') return D.safe(D.runHL());
+    if (k === 'idq') return D.safe(D.runIDQ());
+    if (k === 'range') return D.safe(D.runRange());
     if (!S.range) { go('train'); const c = $('rangeCard'); if (c) { c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); } return; }
-    D.runSung(k);
+    D.safe(D.runSung(k));
   },
   voice: b => { const v = VOICES[+b.dataset.i]; S.range = [v[1], v[2]]; S.voice = v[0]; Tuner.note = Math.round((v[1] + v[2]) / 2); save(); if (tab === 'settings') renderSettings(); else renderTrain(); },
   toggle: b => { const k = b.dataset.key; S[k] = !S[k]; save(); renderSettings(); },
   refdur: b => { S.refDur = +b.dataset.v; save(); renderSettings(); },
   sound: b => { S.sound = b.dataset.v; save(); renderSettings(); },
-  lesson: b => { if (!$('drill').hidden) D.close(); D.runLesson(b.dataset.id); },
-  'd-go': () => { if (D.goRes) D.goRes(true); },
+  lesson: b => { if (!$('drill').hidden) D.close(); D.safe(D.runLesson(b.dataset.id)); },
+  'd-go': () => { if (D.soundWait) Audio.unlockInGesture(); if (D.goRes) D.goRes(true); },
+  'sound-test': b => soundTest(b),
   reset: () => {
     if (!resetArmed) { resetArmed = setTimeout(() => { resetArmed = 0; if (tab === 'settings') renderSettings(); }, 3000); renderSettings(); return; }
     clearTimeout(resetArmed); resetArmed = 0;
@@ -1464,12 +1546,13 @@ const ACTS = {
   'drone-down': () => Tuner.step(-1)
 };
 document.addEventListener('click', e => {
+  if (Audio.ctx && Audio.ctx.state !== 'running') Audio.unlockInGesture();
   const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
   const f = ACTS[b.dataset.act]; if (f) f(b);
 });
 window.addEventListener('resize', () => { lane.w = 0; tLane.w = 0; });
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { Tuner.stop(); }
+  if (document.hidden) { Tuner.stop(); if ($('drill').hidden) Audio.releaseMic(); }
   else if (Audio.ctx && Audio.ctx.state !== 'running' && !$('drill').hidden) Audio.ctx.resume().catch(() => {});
 });
 
